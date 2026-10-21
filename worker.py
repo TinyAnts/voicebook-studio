@@ -9,17 +9,27 @@ import argparse
 import json
 import os
 import sys
+import threading
+import time
 from pathlib import Path
 
+EVENT_LOCK = threading.Lock()
 
 def event(**kwargs):
-    print("VOICEBOOK_EVENT:" + json.dumps(kwargs), flush=True)
+    with EVENT_LOCK:
+        print("VOICEBOOK_EVENT:" + json.dumps(kwargs), flush=True)
+
+
+def heartbeat(stop):
+    while not stop.wait(5):
+        event(type="heartbeat")
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--tasks", required=True)
     args = ap.parse_args()
+    event(type="status", stage="loading", message="Starting the speech engine and checking your hardware…")
     import numpy as np
     import soundfile as sf
     import torch
@@ -30,7 +40,9 @@ def main():
     reference = tasks.get("reference") or None
     instruct = tasks.get("instruction") or ""
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    event(type="status", message=f"Loading {model_id} on {device}. First run downloads model weights.")
+    event(type="device", device=torch.cuda.get_device_name(0) if device == "cuda" else "CPU",
+          cuda=device == "cuda", vram_total_gb=(torch.cuda.get_device_properties(0).total_memory / 1024**3 if device == "cuda" else None))
+    event(type="status", stage="loading", message=f"Loading {model_id} on {device}. Missing model files download automatically; download progress appears in the activity log.")
     if model_id in {"qwen17", "qwen06"}:
         from qwen_tts import Qwen3TTSModel
         repo = "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice" if model_id == "qwen17" else "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice"
@@ -81,7 +93,7 @@ def main():
             return np.concatenate(segments), 24000
     else:
         raise ValueError("Unknown model selection: " + model_id)
-    event(type="status", message="Voice model ready. Narrating passages…")
+    event(type="status", stage="narrating", message="Voice model ready. Narrating passages…")
     for n, item in enumerate(tasks["tasks"], 1):
         path = Path(item["wav"])
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -89,6 +101,9 @@ def main():
         torch.manual_seed(int(tasks.get("seed", 42)) + int(item["index"]))
         if torch.cuda.is_available():
             torch.cuda.manual_seed_all(int(tasks.get("seed", 42)) + int(item["index"]))
+        event(type="chunk_start", index=item["index"], chapter=item.get("chapter", ""),
+              text=item["text"], chars=len(item["text"]))
+        started = time.monotonic()
         audio, sr = speak(item["text"])
         audio = np.asarray(audio, dtype=np.float32).reshape(-1)
         if not len(audio) or not np.all(np.isfinite(audio)):
@@ -102,13 +117,20 @@ def main():
         tmp = path.with_name(path.stem + ".pending.wav")
         sf.write(str(tmp), audio, sr, subtype="PCM_16")
         tmp.replace(path)
-        event(type="chunk", done=n, total=len(tasks["tasks"]), index=item["index"])
+        event(type="chunk", done=n, total=len(tasks["tasks"]), index=item["index"],
+              chars=len(item["text"]), audio_seconds=len(audio)/sr,
+              generation_seconds=time.monotonic()-started,
+              vram_used_gb=(torch.cuda.memory_reserved()/1024**3 if device == "cuda" else None))
     event(type="done", message="All passages generated")
 
 
 if __name__ == "__main__":
+    stop_heartbeat = threading.Event()
+    threading.Thread(target=heartbeat, args=(stop_heartbeat,), daemon=True).start()
     try:
         main()
     except Exception as exc:
         event(type="error", message=f"{type(exc).__name__}: {exc}")
         raise
+    finally:
+        stop_heartbeat.set()

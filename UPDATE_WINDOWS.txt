@@ -1,0 +1,26 @@
+VOICEBOOK STUDIO - UPDATE YOUR EXISTING APP
+
+1. Stop any conversion and close the app terminal window.
+2. Extract this ZIP somewhere temporary.
+3. Open the extracted VoicebookStudio folder. Copy everything inside it.
+4. Paste those files into your EXISTING VoicebookStudio app folder.
+   Choose "Replace the files in the destination" when Windows asks.
+   Keep audiobooks and every .venv-* folder. Do not delete the existing folder.
+   Do not put a second VoicebookStudio folder inside the first.
+5. Double-click start.bat in the existing folder.
+
+No new model installation is required for this update.
+If you choose a model you have never installed, use its optional installer.
+
+WHAT IS NEW
+- Live conversion monitor, useful progress, elapsed time, narration estimate,
+  chapter activity, backend log, Stop and Resume.
+- Reading speed, pauses, export quality and consistent volume.
+- Library: play older files, choose an excerpt start, download, rename,
+  edit title/author/notes, move to Trash and restore.
+- Readable book/chapter/narrator filenames; previews clearly marked.
+- Create missing voice samples once, then replay them instantly.
+  The first sample-bank setup generates speech using your installed model.
+
+Your existing books, audio and narration cache stay in audiobooks.
+Keep the terminal open while converting. Refreshing the browser is fine.

@@ -349,7 +349,7 @@ def generate_tasks(folder: Path, pieces: list[Piece], model: str, speaker: str,
                    instruction: str, seed: int, reference: Optional[Path]) -> Path:
     payload = {"model": model, "speaker": speaker, "instruction": instruction,
                "seed": seed, "reference": str(reference) if reference else "",
-               "tasks": [{"index": p.index, "text": p.text, "wav": str(p.wav)}
+               "tasks": [{"index": p.index, "text": p.text, "wav": str(p.wav), "chapter": p.chapter}
                          for p in pieces if not (p.wav.exists() and p.wav.stat().st_size > 256)]}
     path = folder / "tasks.json"
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -381,63 +381,10 @@ def ffmpeg_binary() -> str:
 
 
 def assemble(folder: Path, pieces: list[Piece], destination: Path, title: str,
-             cover: Optional[Path] = None) -> Path:
-    """Use FFmpeg concat to avoid decoding a full book into RAM; include M4B chapters."""
-    ffmpeg = ffmpeg_binary()
-    if any(not p.wav.exists() for p in pieces):
-        raise RuntimeError("Some audio chunks are not generated yet.")
-    if not pieces:
-        raise RuntimeError("Nothing to export.")
-    list_file = folder / "ffconcat.txt"
-    list_file.write_text("ffconcat version 1.0\n" + "".join(f"file {_ffconcat_path(p.wav)}\n" for p in pieces), encoding="utf-8")
-    metadata = [";FFMETADATA1", f"title={title}", "artist=Voicebook Studio"]
-    current_chapter = None
-    last_start_ms = 0
-    time_ms = 0
-    chapter_markers = []
-    for piece in pieces:
-        if piece.chapter != current_chapter:
-            if chapter_markers:
-                chapter_markers[-1][2] = time_ms
-            chapter_markers.append([piece.chapter, time_ms, time_ms])
-            current_chapter = piece.chapter
-        time_ms += round(get_duration(piece.wav) * 1000)
-    if chapter_markers:
-        chapter_markers[-1][2] = time_ms
-    for i, (heading, start, end) in enumerate(chapter_markers):
-        if end <= start:
-            continue
-        # FFmetadata special characters need escaping.
-        heading = str(heading).replace("\\", "\\\\").replace("=", "\\=").replace(";", "\\;").replace("#", "\\#").replace("\n", " ")
-        metadata.extend(["[CHAPTER]", "TIMEBASE=1/1000", f"START={start}", f"END={end}", f"title={heading}"])
-    meta_file = folder / "chapters.ffmeta"
-    meta_file.write_text("\n".join(metadata) + "\n", encoding="utf-8")
-    output = destination.with_name(destination.stem + ".partial" + destination.suffix)
-    if output.exists():
-        output.unlink()
-    cmd = [ffmpeg, "-hide_banner", "-loglevel", "error", "-nostdin", "-y",
-           "-safe", "0", "-f", "concat", "-i", str(list_file),
-           "-f", "ffmetadata", "-i", str(meta_file)]
-    cover = cover or (folder / "cover.jpg")
-    with_cover = cover.is_file()
-    if with_cover:
-        cmd.extend(["-i", str(cover)])
-    cmd.extend(["-map", "0:a:0"])
-    if with_cover:
-        cmd.extend(["-map", "2:v:0", "-c:v", "mjpeg", "-disposition:v:0", "attached_pic",
-                    "-metadata:s:v:0", "title=Album cover",
-                    "-metadata:s:v:0", "comment=Cover (front)"])
-    cmd.extend(["-map_metadata", "1", "-map_chapters", "1", "-af", "loudnorm=I=-18:TP=-2:LRA=11"])
-    if destination.suffix.lower() == ".m4b":
-        cmd.extend(["-c:a", "aac", "-b:a", "128k", "-f", "ipod"])
-    else:
-        cmd.extend(["-c:a", "libmp3lame", "-q:a", "3", "-id3v2_version", "3", "-f", "mp3"])
-    cmd.append(str(output))
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode:
-        raise RuntimeError("FFmpeg export failed: " + (result.stderr or "Unknown error")[-1500:])
-    output.replace(destination)
-    return destination
+             cover: Optional[Path] = None, **options) -> Path:
+    """Stream export with optional speed, pauses, progress and cancellation."""
+    from export_audio import export_audio
+    return export_audio(folder, pieces, destination, title, cover, **options)
 
 
 def recent_books() -> str:

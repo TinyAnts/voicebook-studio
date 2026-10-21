@@ -1,428 +1,408 @@
-"""Voicebook Studio: local-first PDF/EPUB audiobook maker.
-
-A lightweight Gradio frontend calls model-specific workers in isolated environments.
-No third-party AI API, database, paid account or remote hosting is required.
-"""
+"""Voicebook Studio: local audiobook workspace with a live background-job monitor."""
 from __future__ import annotations
 
 import hashlib
+import html
+from datetime import datetime
 import json
-import os
-import shutil
-import subprocess
-import threading
 from pathlib import Path
 
 import gradio as gr
 
-from core import (
-    LIBRARY, ROOT, assemble, extract_document, generate_tasks,
-    get_duration, plan_job, recent_books, ffmpeg_binary,
-    extract_book_cover, save_book_cover,
-)
+from core import LIBRARY, extract_book_cover, extract_document
+from dashboard import render_chapters, render_status
+from jobs import MANAGER, read_log
+import library_store as catalog
+from naming import MODEL_NAMES
 
 MODELS = {
-    "Qwen3-TTS 1.7B — highest quality to try first": "qwen17",
-    "Qwen3-TTS 0.6B — less GPU memory": "qwen06",
-    "Chatterbox Multilingual V3 — custom voice": "chatter_v3",
-    "Chatterbox Turbo — custom English voice": "chatter_turbo",
-    "Kokoro-82M — very fast": "kokoro",
+    'Qwen3-TTS 1.7B — quality': 'qwen17',
+    'Qwen3-TTS 0.6B — lower memory': 'qwen06',
+    'Chatterbox Multilingual V3 — custom voice': 'chatter_v3',
+    'Chatterbox Turbo — custom English voice': 'chatter_turbo',
+    'Kokoro-82M — fast': 'kokoro',
 }
 VOICES = {
-    "qwen17": ["Aiden", "Ryan"],
-    "qwen06": ["Aiden", "Ryan"],
-    "chatter_v3": ["Reference recording"],
-    "chatter_turbo": ["Reference recording"],
-    "kokoro": ["af_heart", "af_bella", "af_sarah", "am_michael", "am_adam", "bf_emma", "bm_george"],
+    'qwen17': ['Aiden', 'Ryan'], 'qwen06': ['Aiden', 'Ryan'],
+    'chatter_v3': ['Reference recording'], 'chatter_turbo': ['Reference recording'],
+    'kokoro': ['af_heart', 'af_bella', 'af_sarah', 'am_michael', 'am_adam', 'bf_emma', 'bm_george'],
 }
 STYLES = {
-    "Nonfiction — clear and warm":
-        "Read in a natural, calm, warm professional nonfiction audiobook voice. "
-        "Steady pace, subtle emphasis, clear diction, and comfortable pauses; no theatrics.",
-    "Fiction — immersive storytelling":
-        "Read like an engaging, emotionally nuanced fiction audiobook narrator. "
-        "Natural pacing, vivid but restrained expression, consistent narrator identity.",
-    "Calm bedtime listening":
-        "Read slowly, gently and softly, with clear diction and a relaxed, soothing rhythm.",
+    'Nonfiction — clear and warm': 'Read in a natural, calm, warm professional nonfiction audiobook voice. Steady pace, subtle emphasis, clear diction, and comfortable pauses; no theatrics.',
+    'Fiction — immersive storytelling': 'Read like an engaging, emotionally nuanced fiction audiobook narrator. Natural pacing, vivid but restrained expression, consistent narrator identity.',
+    'Calm bedtime listening': 'Read slowly, gently and softly, with clear diction and a relaxed, soothing rhythm.',
 }
-DEMO_TEXT = (
-    "The farmhouse stood at the edge of a quiet valley. By morning, the clouds "
-    "had cleared, and the first light moved across the hills. There was work to be "
-    "done, but for a moment, everything was still."
-)
-ACTIVE: dict[str, object] = {"process": None, "stop_requested": False}
-ACTIVE_LOCK = threading.Lock()
+DEMO_TEXT = ('The farmhouse stood at the edge of a quiet valley. By morning, the clouds '
+             'had cleared, and the first light moved across the hills. There was work to be '
+             'done, but for a moment, everything was still.')
 
 
-def python_for(model: str) -> Path:
-    env = "qwen" if model.startswith("qwen") else "chatterbox" if model.startswith("chatter") else "kokoro"
-    root = ROOT / (".venv-" + env)
-    python = root / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
-    if not python.is_file():
-        raise gr.Error(
-            f"{env} is not installed yet. Run install.bat (for Qwen) or "
-            f"install-chatterbox.bat / install-kokoro.bat, then retry."
-        )
-    return python
-
-
-def update_model(label: str):
+def update_model(label):
     model = MODELS[label]
-    values = VOICES[model]
-    is_qwen = model.startswith("qwen")
-    chatter = model.startswith("chatter")
-    note = (
-        "**Chatterbox requires a clean 6–15 second recording** (WAV, MP3 or FLAC). "
-        "Use your own voice or a voice you have permission to clone. "
-        "The recording is reused across chapters for consistent narration."
-        if chatter else
-        "**Qwen:** audition Aiden and Ryan before converting a book. "
-        "The free pretrained voices run entirely on your computer."
-        if is_qwen else
-        "**Kokoro:** choose any of the listed predefined voices; free and fast."
-    )
-    return (
-        gr.update(choices=values, value=values[0]),
-        gr.update(visible=chatter),
-        gr.update(visible=is_qwen),
-        note,
-    )
-
-
-def set_style(choice: str):
-    return STYLES[choice]
+    note = ('Upload a clean 6–15 second voice recording you have permission to use.' if model.startswith('chatter') else
+            'Aiden and Ryan are English voices. Try the same passage with both.' if model.startswith('qwen') else
+            'Choose a predefined voice and listen to a sample.')
+    if model == 'qwen06':
+        note += ' Custom tone instructions are only applied to Qwen 1.7B in this app.'
+    return (gr.update(choices=VOICES[model], value=VOICES[model][0]),
+            gr.update(visible=model.startswith('chatter')), gr.update(visible=model=='qwen17'), note)
 
 
 def inspect_chapters(book, first_page, last_page, chapter_pages):
     if not book:
-        return gr.update(choices=[], value=[]), "Upload a book to see its chapters."
+        return gr.update(choices=[], value=[]), [], 'Upload a book to choose chapters.'
     try:
-        chapters = extract_document(
-            Path(book), int(first_page), int(last_page) or None, int(chapter_pages)
-        )
-        choices = [(f"{i+1:02d} · {c.title} · {len(c.text):,} chars", str(i))
-                   for i, c in enumerate(chapters)]
-        return gr.update(choices=choices, value=[value for _name, value in choices]), (
-            f"**{len(chapters)} sections available.** All selected by default. "
-            "For EPUB these follow the book's internal sections; for PDF they are "
-            "groups of pages. You can deselect any section."
-        )
+        chapters = extract_document(Path(book), int(first_page), int(last_page) or None, int(chapter_pages))
+        choices = [(f'{i+1:02d} · {c.title} · {len(c.text.split()):,} words', str(i)) for i,c in enumerate(chapters)]
+        data = [{'id':str(i), 'title':c.title, 'words':len(c.text.split()), 'excerpt':c.text[:1600]} for i,c in enumerate(chapters)]
+        return gr.update(choices=choices, value=[x['id'] for x in data]), data, selection_summary(data, [x['id'] for x in data])
     except Exception as exc:
-        return gr.update(choices=[], value=[]), f"**Unable to read document:** {exc}"
+        return gr.update(choices=[], value=[]), [], f'Unable to read document: {exc}'
 
 
+def selection_summary(data, selected):
+    chosen = [x for x in data if x['id'] in (selected or [])]
+    words = sum(x['words'] for x in chosen)
+    return f'**{len(chosen)} of {len(data)} sections selected · {words:,} words.** EPUB follows reading sections; PDF uses bookmarks where available, otherwise page groups.'
+
+
+def selection_changed(data, selected):
+    chosen = [x for x in data if x['id'] in (selected or [])]
+    return selection_summary(data, selected), chosen[0]['excerpt'] if chosen else ''
 
 
 def cover_preview(book, override):
-    """Display exactly the image that will be embedded in generated audio."""
-    if not book and not override:
-        return None, "Upload a book to preview its cover."
     if not book:
-        return None, "Upload a book to accompany your selected cover image."
-    source = Path(book)
-    uploaded = Path(override) if override else None
+        return None, 'Cover detected after upload.'
     try:
-        stamp = f"{source.resolve()}:{source.stat().st_mtime_ns}:{source.stat().st_size}"
-        if uploaded:
-            stamp += f":{uploaded.resolve()}:{uploaded.stat().st_mtime_ns}:{uploaded.stat().st_size}"
-        digest = hashlib.sha256(stamp.encode("utf-8")).hexdigest()[:16]
-        target = LIBRARY / "_cover-previews" / f"{digest}.jpg"
-        result = target if target.is_file() else extract_book_cover(source, target, uploaded)
-        if result:
-            return str(result), (
-                "**Your uploaded cover** — automatically embedded in the final M4B/MP3."
-                if uploaded else "**Cover detected** — automatically embedded in the final M4B/MP3."
-            )
-        return None, "No embedded cover found. Upload a JPG/PNG/WEBP to add artwork."
-    except Exception as exc:
-        return None, f"**Cover preview failed:** {exc}"
-
-
-def samples() -> list[tuple[str, str]]:
-    entries = []
-    for file in LIBRARY.glob("*/preview.mp3"):
-        try:
-            data = json.loads((file.parent / "book.json").read_text(encoding="utf-8"))
-            title = f"{data['original']} · {data['model']} · {data['speaker']}"
-        except (OSError, KeyError, ValueError):
-            title = file.parent.name
-        entries.append((title, str(file)))
-    entries.sort(key=lambda p: Path(p[1]).stat().st_mtime, reverse=True)
-    return entries[:50]
-
-
-def completed_books() -> list[tuple[str, str]]:
-    entries = []
-    for ext in ("m4b", "mp3"):
-        for path in LIBRARY.glob(f"*/*.{ext}"):
-            if path.name in {"preview.mp3", "listening-sample.mp3"}:
-                continue
-            entries.append((f"{path.stem} · {path.stat().st_size/(1024*1024):.1f} MB", str(path)))
-    return sorted(entries, key=lambda it: Path(it[1]).stat().st_mtime, reverse=True)[:50]
-
-
-def select_saved_preview(path):
-    return path if path and Path(path).is_file() else None
-
-
-def stop_job():
-    with ACTIVE_LOCK:
-        proc = ACTIVE.get("process")
-        if isinstance(proc, subprocess.Popen) and proc.poll() is None:
-            ACTIVE["stop_requested"] = True
-            proc.terminate()
-            return "**Stopped.** Completed passages are saved; run the same job again to resume."
-    return "No generation is running."
-
-
-def run_generation(book, cover_file, selected_chapters, model_label, voice, reference,
-                   first_page, last_page, chapter_pages, chunk_chars,
-                   instructions, seed, output_format, audition_text,
-                   audition_from_book, preview, progress=gr.Progress()):
-    """Stream progress and return an audible clip plus a downloadable file."""
-    yield "Checking your settings…", None, None, recent_books(), gr.update(choices=samples())
-    model = MODELS[model_label]
-    if model.startswith("chatter") and not reference:
-        raise gr.Error("Chatterbox needs a 6–15 second narrator recording before preview or generation.")
-    try:
-        ffmpeg_binary()
-    except RuntimeError as exc:
-        raise gr.Error(str(exc)) from exc
-    py = python_for(model)
-
-    # Audition a known passage, independent of the uploaded book, by default.
-    # An audition based on a book takes only its first selected 320-character chunk.
-    if preview and not audition_from_book:
-        excerpt = (audition_text or DEMO_TEXT).strip()
-        if len(excerpt) < 20:
-            raise gr.Error("Please enter at least 20 characters for the audition sample.")
-        digest = hashlib.sha256(excerpt.encode("utf-8")).hexdigest()[:16]
-        trial_dir = LIBRARY / "_audition-inputs"
-        trial_dir.mkdir(exist_ok=True)
-        source = trial_dir / f"voice-audition-{digest}.txt"
-        source.write_text(excerpt, encoding="utf-8")
-        selected = None
-    else:
-        if not book:
-            raise gr.Error("Upload a PDF/EPUB first, or uncheck 'Use book excerpt' for a voice audition.")
         source = Path(book)
-        if not selected_chapters:
-            raise gr.Error("Choose at least one chapter in the chapter selector.")
-        selected = [int(x) for x in selected_chapters]
+        uploaded = Path(override) if override else None
+        stamp = f'{source.resolve()}:{source.stat().st_mtime_ns}:{source.stat().st_size}'
+        if uploaded:
+            stamp += f':{uploaded.resolve()}:{uploaded.stat().st_mtime_ns}'
+        target = LIBRARY / '_cover-previews' / (hashlib.sha256(stamp.encode()).hexdigest()[:16]+'.jpg')
+        result = target if target.is_file() else extract_book_cover(source, target, uploaded)
+        return (str(result), 'Cover will be embedded in your audiobook.') if result else (None, 'No cover found. You can add one below.')
+    except Exception as exc:
+        return None, f'Cover unavailable: {exc}'
 
-    ref = Path(reference) if reference and model.startswith("chatter") else None
+
+def library_choices(query='', kind='All', sort='Newest first'):
+    return gr.update(choices=catalog.choices(query,kind,sort),value=None)
+
+
+def library_select(value):
+    if not value:
+        return (None,'Select a saved generation to listen, download or edit.',None,None,'','','','','',0)
     try:
-        folder, all_pieces, title = plan_job(
-            source, model, voice, instructions, ref,
-            int(first_page) if source.suffix.lower() == ".pdf" else 1,
-            int(last_page) if source.suffix.lower() == ".pdf" else 0,
-            int(chapter_pages), int(chunk_chars), int(seed), selected,
-        )
+        item=catalog.detail(value)
+        esc=lambda x:html.escape(str(x))
+        settings=item['settings']
+        text=f'<h3>{esc(item["title"])}</h3><p>{esc(item["kind"])} · {esc(MODEL_NAMES.get(item["model"],item["model"]))} · {esc(item["voice"])} · {esc(item["format"])} · {item["size_mb"]:.1f} MB</p>'
+        text+=f'<p>Saved {datetime.fromtimestamp(item["modified"]).strftime("%d %b %Y, %H:%M")} · {esc(item["filename"])}.{item["format"].lower()}</p>'
+        if settings:text+=f'<p>Speed {settings.get("speed",1):g}× · {settings.get("bitrate",128)} kbps</p>'
+        if item['chapter_names']:text+='<p>'+esc(' / '.join(item['chapter_names']))+'</p>'
+        return (item['cover'],text,catalog.preview(value),value,item['title'],item['author'],
+                item['filename'],item['notes'],item['excerpt'],0)
+    except Exception as exc:raise gr.Error(str(exc)) from exc
+
+
+def play_excerpt(value,start,length):
+    try:return catalog.preview(value,float(start)*60,int(length))
+    except Exception as exc:raise gr.Error(str(exc)) from exc
+
+
+def save_library(value,title,author,filename,notes,query,kind,sort):
+    try:
+        MANAGER.begin_library_edit()
+        try:
+            updated=catalog.edit(value,title,author,notes,filename)
+            MANAGER.invalidate_output(value)
+        finally:MANAGER.end_library_edit()
+        options=catalog.choices(query,kind,sort)
+        return gr.update(choices=options,value=updated if updated in dict(options).values() else None),'Saved title, author, notes and filename.'
+    except Exception as exc:raise gr.Error(str(exc)) from exc
+
+
+def trash_library(value,query,kind,sort):
+    try:
+        MANAGER.begin_library_edit()
+        try:
+            catalog.trash(value);MANAGER.invalidate_output(value)
+        finally:MANAGER.end_library_edit()
+        return library_choices(query,kind,sort),gr.update(choices=catalog.trash_choices(),value=None),'Moved to Trash. You can restore it below; narration passages are kept.'
+    except Exception as exc:raise gr.Error(str(exc)) from exc
+
+
+def restore_library(value,query,kind,sort):
+    try:
+        MANAGER.begin_library_edit()
+        try:catalog.restore(value)
+        finally:MANAGER.end_library_edit()
+        return library_choices(query,kind,sort),gr.update(choices=catalog.trash_choices(),value=None),'Restored. Select the generation in the library to play it.'
+    except Exception as exc:raise gr.Error(str(exc)) from exc
+
+
+def saved_voices(model,voice):
+    values=catalog.voice_choices(MODELS[model],voice)
+    return gr.update(choices=values,value=values[0][1] if values else None)
+
+
+def saved_voice_audio(value):
+    if not value:return None,''
+    try:return catalog.preview(value),catalog.detail(value)['excerpt']
+    except Exception as exc:raise gr.Error(str(exc)) from exc
+
+
+def launch_job(preview, book, cover, chapters, model, voice, reference, first_page, last_page,
+               chapter_pages, chunk_chars, instructions, seed, output_format, audition_text,
+               from_book, speed, passage_gap, chapter_gap, normalize, bitrate, sample_voices=None):
+    try:
+        MANAGER.start(dict(preview=preview, book=book, cover=cover, chapters=chapters,
+                           model=MODELS[model], voice=voice, reference=reference,
+                           first_page=first_page, last_page=last_page, chapter_pages=chapter_pages,
+                           chunk_chars=chunk_chars, instructions=instructions, seed=seed,
+                           format=output_format, audition_text=audition_text, from_book=from_book,
+                           speed=float(speed), passage_gap=float(passage_gap), chapter_gap=float(chapter_gap),
+                           normalize=normalize, bitrate=int(bitrate),sample_voices=sample_voices))
     except Exception as exc:
         raise gr.Error(str(exc)) from exc
 
-    if source.suffix.lower() in {".pdf", ".epub"}:
-        try:
-            save_book_cover(source, folder, Path(cover_file) if cover_file else None)
-        except Exception as exc:
-            raise gr.Error(f"Cannot embed selected cover: {exc}") from exc
-    elif cover_file:
-        try:
-            save_book_cover(source, folder, Path(cover_file))
-        except Exception as exc:
-            raise gr.Error(f"Cannot embed selected cover: {exc}") from exc
 
-    pieces = all_pieces[:1] if preview else all_pieces
-    already = sum(p.wav.is_file() and p.wav.stat().st_size > 256 for p in pieces)
-    kind = "Voice audition" if preview else "Audiobook"
-    yield (
-        f"**{kind}:** {len(pieces)} passages, {already} already saved. "
-        "Preparing voice model…"
-    ), None, None, recent_books(), gr.update(choices=samples())
+def start_book(*args):
+    launch_job(False, *args)
 
-    # Copy references into the resumable book folder before launching a worker.
-    if ref:
-        ref = folder / ("reference" + ref.suffix.lower())
-    tasks_file = generate_tasks(folder, pieces, model, voice, instructions, int(seed), ref)
-    outstanding = len(json.loads(tasks_file.read_text(encoding="utf-8"))["tasks"])
-    if outstanding:
-        log_path = folder / "worker.log"
-        with log_path.open("w", encoding="utf-8") as log:
-            proc = subprocess.Popen(
-                [str(py), "-u", str(ROOT / "worker.py"), "--tasks", str(tasks_file)],
-                cwd=str(ROOT), stdout=subprocess.PIPE, stderr=log,
-                encoding="utf-8", errors="replace", bufsize=1, text=True,
-            )
-            with ACTIVE_LOCK:
-                ACTIVE["process"] = proc
-                ACTIVE["stop_requested"] = False
-            error = None
-            try:
-                assert proc.stdout is not None
-                for raw in proc.stdout:
-                    if not raw.startswith("VOICEBOOK_EVENT:"):
-                        continue
-                    try:
-                        msg = json.loads(raw[len("VOICEBOOK_EVENT:"):])
-                    except json.JSONDecodeError:
-                        continue
-                    if msg.get("type") == "error":
-                        error = msg.get("message")
-                    elif msg.get("type") == "status":
-                        yield f"**{kind}:** {msg['message']}", None, None, recent_books(), gr.update(choices=samples())
-                    elif msg.get("type") == "chunk":
-                        finished = already + int(msg.get("done", 0))
-                        progress(min(1, finished / len(pieces)), desc=f"Passage {finished} of {len(pieces)}")
-                        yield (f"**{kind}:** {finished}/{len(pieces)} passages. "
-                               "Progress is saved automatically."), None, None, recent_books(), gr.update(choices=samples())
-                code = proc.wait()
-                if code:
-                    with ACTIVE_LOCK:
-                        stopped = ACTIVE.get("stop_requested", False)
-                    if stopped:
-                        yield "Stopped — generated passages remain saved for resuming.", None, None, recent_books(), gr.update(choices=samples())
-                        return
-                    tail = log_path.read_text(encoding="utf-8", errors="replace")[-1400:]
-                    raise gr.Error(f"Generation interrupted: {error or tail or 'unknown error'}. "
-                                   "Run it again to reuse completed passages. "
-                                   "If GPU memory is insufficient, try Qwen 0.6B.")
-            finally:
-                with ACTIVE_LOCK:
-                    if ACTIVE.get("process") is proc:
-                        ACTIVE["process"] = None
-                        ACTIVE["stop_requested"] = False
-                if proc.poll() is None:
-                    proc.terminate()
 
-    if any(not p.wav.is_file() for p in pieces):
-        raise gr.Error("Audio is incomplete. Run again to resume.")
-    yield "Encoding audio and chapter markers…", None, None, recent_books(), gr.update(choices=samples())
-    extension = "mp3" if preview else output_format.lower()
-    dest = folder / ("preview.mp3" if preview else f"{title}-{model}.{extension}")
+def start_preview(*args):
+    launch_job(True, *args)
+
+
+def build_samples(*args):
+    values=list(args)
+    model=MODELS[values[3]]
+    if model.startswith('chatter'):
+        raise gr.Error('Custom voices use your recording. Use Generate voice preview to save a sample of it.')
+    values[13]=DEMO_TEXT
+    values[14]=False
+    values[15]=1.0
+    launch_job(True,*values,sample_voices=VOICES[model])
+
+
+def resume_job():
     try:
-        assemble(folder, pieces, dest, title + (" — voice audition" if preview else ""))
-        if preview:
-            listening = dest
-        else:
-            listening = folder / "listening-sample.mp3"
-            # Rebuild the sample whenever a different full-book output was created.
-            assemble(folder, pieces[:min(3, len(pieces))], listening, title + " — excerpt")
-        duration = sum(get_duration(p.wav) for p in pieces)
+        MANAGER.retry()
     except Exception as exc:
-        raise gr.Error(f"Could not export audiobook: {exc}") from exc
-    progress(1, desc="Complete")
-    detail = "Listen above, or compare it with saved auditions below." if preview else (
-        "Download the complete file, or open the output folder. "
-        "M4B includes chapter markers; MP3 is a single file."
+        raise gr.Error(str(exc)) from exc
+
+
+def poll_ui(seen,query="",kind="All",sort="Newest first",model=list(MODELS)[0],voice="Aiden"):
+    s = MANAGER.snapshot()
+    seen=seen or {}
+    busy = s['status'] in ('running', 'stopping')
+    token = f'{s["job_id"]}:{s["status"]}'
+    changed = token != seen.get('token')
+    catalog_token=(s["job_id"],s.get("sample_index"),s["status"])
+    catalog_changed=seen.get("catalog_token")!=catalog_token
+    finished = s['status']=='done'
+    is_preview = s.get('kind')=='Voice preview'
+    log = read_log(s.get('log_path')) or 'Backend messages appear here while a job is running.'
+    chapter_token = (s['job_id'], s.get('completed'), s.get('total'), s.get('current_chapter'), s['status'])
+    skip = gr.skip
+    return (
+        render_status(s), render_chapters(s) if seen.get('chapter_token')!=chapter_token else skip(),
+        log if log!=seen.get('log') else skip(),
+        gr.update(interactive=not busy) if changed else skip(),
+        gr.update(interactive=not busy) if changed else skip(),
+        gr.update(interactive=s['status']=='running') if changed else skip(),
+        gr.update(interactive=s['status'] in ('stopped','failed')) if changed else skip(),
+        gr.update(visible=finished and not is_preview) if changed else skip(),
+        s.get('audio') if changed and finished and not is_preview else (None if changed else skip()),
+        s.get('output') if changed and finished else (None if changed else skip()),
+        s.get('audio') if changed and finished and is_preview else (None if changed and not finished else skip()),
+        gr.update(choices=catalog.choices(query,kind,sort)) if catalog_changed and (finished or s.get('sample_index',1)>1) else skip(),
+        saved_voices(model,voice) if catalog_changed and (finished or s.get('sample_index',1)>1) else skip(),
+        gr.update(interactive=not busy and not MODELS[model].startswith('chatter')),
+        {'token':token, 'chapter_token':chapter_token, 'log':log,'catalog_token':catalog_token},
     )
-    yield (
-        f"✅ **{kind} ready** · {duration / 60:.1f} minutes · {detail} "
-        f"Saved in `{dest.parent}`"
-    ), str(listening), str(dest), recent_books(), gr.update(choices=samples())
 
 
-def audition(*args):
-    yield from run_generation(*args, True)
+CSS = '''
+.gradio-container {max-width:1260px!important;margin:auto!important;--block-radius:14px;}
+#masthead {display:flex;justify-content:space-between;align-items:center;padding:18px 4px 12px;gap:20px}
+#masthead h1{font-size:27px;margin:0;color:#183a54} #masthead p{margin:4px 0;color:#5b6d7d}
+.local-badge,.job-kind{border-radius:20px;padding:6px 12px;background:#e8f2f7;color:#205c79;font-size:12px;font-weight:650;white-space:nowrap}
+.job-card{border:1px solid #d8e5ed;border-radius:16px;padding:22px 25px;background:var(--block-background-fill,#fff);box-shadow:0 4px 20px #14334a07}
+.job-card h2{font-size:22px!important;margin:5px 0 8px!important;overflow-wrap:anywhere}
+.job-top{display:flex;justify-content:space-between;align-items:start;gap:12px}
+.eyebrow{font-size:11px;font-weight:750;letter-spacing:1.4px;color:#286b91}
+.job-card.failed{border-color:#ce5858}.job-card.failed .eyebrow{color:#b82929}.job-card.done{border-color:#6aa787}
+.job-settings,.worker-line,.job-foot{font-size:12px;color:var(--body-text-color-subdued,#526777)}
+.stages{display:flex;gap:12px;justify-content:space-between;flex-wrap:wrap;margin:18px 0}
+.step{display:flex;gap:7px;align-items:center;font-size:12px;color:#778898}.step b{border-radius:50%;background:#edf1f5;width:23px;height:23px;display:grid;place-items:center}
+.step.active{font-weight:700;color:#17658c}.step.active b{background:#17658c;color:white}.step.finished{color:#327556}.step.finished b{background:#e4f3ea}
+.progress-label{display:flex;justify-content:space-between;gap:14px;font-size:13px;margin-bottom:7px}
+.job-progress{display:block;width:100%;height:10px;accent-color:#2b7da8;border:0;border-radius:12px;overflow:hidden;background:#e7eef3}
+.job-progress::-webkit-progress-bar{background:#e7eef3;border-radius:12px}.job-progress::-webkit-progress-value{background:#2b7da8;border-radius:12px;transition:width .4s}.job-progress::-moz-progress-bar{background:#2b7da8}
+.job-progress:not([value]){background:linear-gradient(90deg,#e7eef3 20%,#5ca2c4 50%,#e7eef3 80%);background-size:200% 100%;animation:working 2s linear infinite}
+@keyframes working{to{background-position:-200% 0}}@media(prefers-reduced-motion:reduce){.job-progress{animation:none!important;transition:none!important}}
+.job-message{font-size:13px;margin:10px 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding:13px 0;border-top:1px solid #e7eef3;border-bottom:1px solid #e7eef3;margin:12px 0}
+.metric span{display:block;font-size:11px;color:var(--body-text-color-subdued,#526777);margin-bottom:4px}.metric strong{font-size:17px}
+.current-passage{font-size:12px;margin:12px 0;padding:10px 12px;background:var(--background-fill-secondary,#f3f7fa);border-left:3px solid #75abc6;border-radius:4px}.current-passage p{margin:5px 0 0;line-height:1.5}
+.worker-line{line-height:1.7}.job-foot{font-size:11px;margin-top:7px}
+#library-list{max-height:460px;overflow-y:auto}#library-detail{overflow-wrap:anywhere;font-size:13px}#library-detail h3{font-size:22px}#library-list label{white-space:normal}\n#chapter-selector{max-height:280px;overflow-y:auto}.chapter-table{max-height:280px;overflow:auto}.chapter-table table{border-collapse:collapse;width:100%;font-size:12px}.chapter-table th,.chapter-table td{text-align:left;padding:9px;border-bottom:1px solid #e1e8ee}
+#job-actions{margin:0 0 6px}.section-heading{margin:6px 0!important}.muted{color:#60778b;font-size:13px}
+@media(max-width:640px){#masthead{align-items:start}.local-badge{display:none}.job-card{padding:16px}.metrics{grid-template-columns:repeat(2,1fr)}.stages{gap:8px}.step{font-size:11px}.metric strong{font-size:15px}}
+'''
 
+with gr.Blocks(title='Voicebook Studio') as demo:
+    gr.HTML('<header id="masthead"><div><h1>Voicebook Studio</h1><p>Your books. Your narrator. At your pace.</p></div><span class="local-badge">Runs on your computer</span></header>')
+    status = gr.HTML(render_status(MANAGER.snapshot()), elem_id='job-dashboard')
+    with gr.Row(elem_id='job-actions'):
+        go = gr.Button('Create audiobook', variant='primary', scale=3)
+        stop = gr.Button('Stop & keep progress', variant='stop', interactive=False, scale=1)
+        resume = gr.Button('Resume / retry last job', interactive=False, scale=1)
+    with gr.Accordion('Chapter progress & backend activity', open=False):
+        chapter_status = gr.HTML(render_chapters(MANAGER.snapshot()))
+        logs = gr.Textbox(label='Live activity log', lines=5, max_lines=8, interactive=False)
+    with gr.Group(visible=False) as result_group:
+        gr.Markdown('### Your audiobook is ready')
+        book_audio = gr.Audio(label='Listen to a short excerpt', type='filepath', interactive=False)
+        download = gr.File(label='Download your complete audiobook')
 
-def generate_book(*args):
-    yield from run_generation(*args, False)
-
-
-CSS = """
-.gradio-container {max-width: 1150px !important; margin: auto !important;}
-#hero {background: linear-gradient(125deg,#12253e,#205f8e);
-       padding:24px 30px;border-radius:18px;margin:4px 0 12px;color:#fff;}
-#hero h1 {color:#fff;font-size:30px;margin:0 0 5px;}
-#hero p {color:#d8ebfd;margin:0;}
-"""
-
-with gr.Blocks(title="Voicebook Studio | Free AI Audiobooks") as demo:
-    gr.HTML("""<div id="hero"><h1>🎧 Voicebook Studio</h1>
-    <p>Turn long PDFs and EPUBs into narrated audiobooks. Choose chapters, audition voices, listen and download.</p></div>""")
-    with gr.Row():
-        with gr.Column(scale=6):
-            gr.Markdown("### 1 · Upload a book")
-            book = gr.File(label="PDF, EPUB, TXT or MD", file_types=[".pdf", ".epub", ".txt", ".md"], type="filepath")
-            with gr.Accordion("Cover artwork (automatically detected)", open=False):
-                cover_file = gr.File(
-                    label="Optional: replace book cover with your own JPG / PNG / WEBP",
-                    file_types=[".jpg", ".jpeg", ".png", ".webp"], type="filepath",
-                )
-                gr.Markdown("EPUB: uses the embedded cover. PDF: uses the first page. Upload an image here to override either one. Embedded in M4B **and** MP3.")
-            with gr.Accordion("Choose chapters", open=True):
-                chapters = gr.CheckboxGroup(label="Chapters / sections", choices=[], value=[])
-                chapter_info = gr.Markdown("Upload a book to see available sections.")
-            gr.Markdown("### 2 · Pick a narrator")
-            model_label = gr.Dropdown(choices=list(MODELS), value=list(MODELS)[0], label="Free local voice model")
-            voice = gr.Dropdown(choices=VOICES["qwen17"], value="Aiden", label="Narrator")
-            model_help = gr.Markdown("**Qwen:** Aiden and Ryan are English narrator voices. Try both!")
-            reference = gr.File(label="Your authorized 6–15 second narrator voice recording (Chatterbox)",
-                                file_types=[".wav", ".mp3", ".flac"], type="filepath", visible=False)
-            with gr.Accordion("Narration tone", open=False) as tone_panel:
-                style = gr.Dropdown(choices=list(STYLES), value=list(STYLES)[0], label="Storytelling style")
-                instructions = gr.Textbox(value=STYLES[list(STYLES)[0]], lines=3,
-                                          label="Instructions for Qwen 1.7B (optional to edit)")
-            gr.Markdown("### 3 · Audition the voice")
-            audition_text = gr.Textbox(value=DEMO_TEXT, lines=3, label="Short passage to hear",
-                                      info="Edit this passage to test difficult names or a scene from your book.")
-            audition_from_book = gr.Checkbox(label="Use the beginning of the first selected chapter instead", value=False)
-            audition_button = gr.Button("▶ Generate voice preview", variant="secondary")
-            gr.Markdown("### 4 · Create your audiobook")
+    with gr.Tabs():
+        with gr.Tab('Create audiobook'):
             with gr.Row():
-                go_button = gr.Button("✨ Generate selected chapters", variant="primary", scale=3)
-                stop_button = gr.Button("⏹ Stop", variant="stop", scale=1)
-        with gr.Column(scale=5):
-            gr.Markdown("### Cover artwork")
-            cover_image = gr.Image(label="Audiobook cover preview", type="filepath", interactive=False, height=255)
-            cover_info = gr.Markdown("Upload a book to preview its cover.")
-            gr.Markdown("### Listen and download")
-            status = gr.Markdown("Choose a narrator and click **Generate voice preview** to hear it.")
-            audio = gr.Audio(label="Play voice audition / book excerpt", type="filepath", interactive=False)
-            output = gr.File(label="Download MP3 or chapter-marked M4B")
-            with gr.Accordion("Advanced book settings", open=False):
-                first_page = gr.Number(value=1, precision=0, minimum=1, label="First PDF page")
-                last_page = gr.Number(value=0, precision=0, minimum=0, label="Last PDF page (0 means end)")
-                chapter_pages = gr.Slider(1, 30, value=10, step=1, label="PDF section size, pages")
-                chunk_chars = gr.Slider(180, 500, value=320, step=20,
-                                        label="Narration chunk size (smaller may be more reliable)")
-                seed = gr.Number(value=42, precision=0, label="Random seed")
-                output_format = gr.Radio(["M4B", "MP3"], value="M4B", label="Export format")
-            gr.Markdown("### Compare previous voice auditions")
-            saved = gr.Dropdown(choices=samples(), label="Previously generated samples", value=None)
-            saved_player = gr.Audio(label="Play selected earlier voice", type="filepath", interactive=False)
-            gr.Markdown("### Your saved library")
-            library = gr.Markdown(recent_books())
-            saved_book = gr.Dropdown(choices=completed_books(), label="Previously completed audiobooks")
-            saved_download = gr.File(label="Download a saved audiobook")
-            refresh = gr.Button("↻ Refresh", size="sm")
-            gr.Markdown("*Everything is processed locally. Completed passages are cached so interrupted multi-hour books can resume. Scanned PDFs must be OCR-converted first.*")
+                with gr.Column(scale=6, min_width=340):
+                    gr.Markdown('### 1 · Your book')
+                    book = gr.File(label='Upload PDF, EPUB, TXT or MD', file_types=['.pdf','.epub','.txt','.md'], type='filepath')
+                    with gr.Row():
+                        cover_image = gr.Image(label='Book cover', type='filepath', interactive=False, height=170, scale=1)
+                        with gr.Column(scale=2):
+                            cover_info = gr.Markdown('Cover detected after upload.')
+                            with gr.Accordion('Replace artwork', open=False):
+                                cover = gr.File(label='Custom JPG / PNG / WEBP', file_types=['.jpg','.jpeg','.png','.webp'], type='filepath')
+                    chapter_info = gr.Markdown('Upload a book to choose chapters.')
+                    with gr.Row():
+                        select_all = gr.Button('Select all', size='sm')
+                        select_none = gr.Button('Clear selection', size='sm')
+                    chapters = gr.CheckboxGroup(choices=[], value=[], label='Chapters to narrate', elem_id='chapter-selector')
+                    chapter_data = gr.State([])
+                    with gr.Accordion('Check extracted text', open=False):
+                        extracted = gr.Textbox(label='Beginning of the first selected chapter', lines=6, interactive=False)
+                        gr.Markdown('Check the reading order before a long conversion. Scanned PDFs need OCR first.')
+                    with gr.Accordion('PDF page range & section size', open=False):
+                        with gr.Row():
+                            first_page = gr.Number(value=1, minimum=1, precision=0, label='First page')
+                            last_page = gr.Number(value=0, minimum=0, precision=0, label='Last page · 0 = end')
+                        chapter_pages = gr.Slider(1,30,value=10,step=1,label='Pages per section when PDF bookmarks are unavailable')
+                with gr.Column(scale=6, min_width=340):
+                    gr.Markdown('### 2 · Your narrator')
+                    model = gr.Dropdown(choices=list(MODELS), value=list(MODELS)[0], label='Voice model')
+                    voice = gr.Dropdown(choices=VOICES['qwen17'], value='Aiden', label='Narrator')
+                    model_help = gr.Markdown('Aiden and Ryan are English voices. Try the same passage with both.')
+                    reference = gr.File(label='Authorized narrator recording · 6–15 seconds', file_types=['.wav','.mp3','.flac'], type='filepath', visible=False)
+                    with gr.Accordion('Narration style', open=False) as tone_panel:
+                        style = gr.Dropdown(choices=list(STYLES),value=list(STYLES)[0],label='Tone · Qwen 1.7B')
+                        instructions = gr.Textbox(value=STYLES[list(STYLES)[0]], lines=3, label='Custom narration direction')
+                    with gr.Accordion('Saved voice samples · replay instantly',open=True):
+                        saved_voice = gr.Dropdown(choices=catalog.voice_choices('qwen17','Aiden'),label='Samples for this narrator')
+                        sample_player = gr.Audio(label='Play saved voice sample',type='filepath',interactive=False)
+                        sample_text = gr.Textbox(label='Passage read in this sample',lines=2,interactive=False)
+                        samples_button = gr.Button('Create missing voice samples for this model',size='sm')
+                        gr.Markdown('Creates one shared passage for every built-in voice at 1×, then saves it. First setup generates speech; later replays need no model. Uses the selected tone and seed. Custom voices use your reference recording below.')
+                    audition_text = gr.Textbox(value=DEMO_TEXT,lines=3,max_lines=5,label='Voice preview text')
+                    from_book = gr.Checkbox(value=False,label='Use selected book excerpt instead')
+                    preview = gr.Button('Generate voice preview', variant='secondary')
+                    preview_audio = gr.Audio(label='Listen to your voice preview',type='filepath',interactive=False)
+                    gr.Markdown('### 3 · Pace & export')
+                    speed = gr.Slider(.75,1.5,value=1.0,step=.05,label='Reading speed',info='1.0× = original. Applied to preview and export with pitch preserved; cached narration is reused.')
+                    with gr.Row():
+                        output_format = gr.Radio(['M4B','MP3'],value='M4B',label='File format')
+                        bitrate = gr.Dropdown([96,128,192],value=128,label='Audio bitrate · kbps')
+                    gr.Markdown('**M4B** keeps navigable chapter markers and cover artwork.')
+                    with gr.Accordion('Pauses & consistent volume',open=False):
+                        passage_gap = gr.Slider(0,1,value=0,step=.05,label='Extra pause between passages · seconds',info='Added to the short pause already present in generated audio.')
+                        chapter_gap = gr.Slider(0,5,value=1,step=.25,label='Extra pause between chapters · seconds')
+                        normalize = gr.Checkbox(value=True,label='Keep listening volume consistent')
+                    with gr.Accordion('Advanced generation settings',open=False):
+                        chunk_chars = gr.Slider(180,500,value=320,step=20,label='Characters per passage')
+                        seed = gr.Number(value=42,precision=0,label='Random seed')
+                        gr.Markdown('Changing the voice, style, passage size or seed creates new narration. Speed, pauses and export quality reuse saved narration.')
+            gr.Markdown('Changes apply to the **next** job. The monitor shows the settings used by the running job. You may refresh this page while a job runs; keep the app terminal open.')
+        with gr.Tab('Library · books & previews'):
+            with gr.Row():
+                with gr.Column(scale=4,min_width=290):
+                    gr.Markdown('### Your generations')
+                    library_search=gr.Textbox(label='Search books, voices or filenames',placeholder='Find a saved generation…')
+                    library_kind=gr.Radio(['All','Audiobook','Voice preview'],value='All',label='Show')
+                    library_sort=gr.Dropdown(['Newest first','Oldest first','Title A–Z'],value='Newest first',label='Sort')
+                    refresh=gr.Button('Refresh library',size='sm')
+                    library_list=gr.Radio(choices=catalog.choices(),label='Select a generation',elem_id='library-list')
+                with gr.Column(scale=8,min_width=340):
+                    with gr.Row():
+                        library_cover=gr.Image(label='Cover',type='filepath',height=150,interactive=False,scale=1)
+                        library_info=gr.HTML('Select a saved generation to listen, download or edit.',elem_id='library-detail')
+                    library_player=gr.Audio(label='Listen to this generation',type='filepath',interactive=False)
+                    with gr.Row():
+                        excerpt_start=gr.Number(value=0,minimum=0,maximum=1440,label='Excerpt starts at · minutes')
+                        excerpt_length=gr.Dropdown([30,60,120],value=60,label='Excerpt length · seconds')
+                        excerpt_button=gr.Button('Play excerpt from here')
+                    library_download=gr.File(label='Download complete file')
+                    library_passage=gr.Textbox(label='Preview passage · when available',lines=2,interactive=False)
+                    with gr.Accordion('Rename & edit details',open=False):
+                        edit_title=gr.Textbox(label='Title')
+                        edit_author=gr.Textbox(label='Author')
+                        edit_filename=gr.Textbox(label='Filename · keep extension off')
+                        edit_notes=gr.Textbox(label='Notes',lines=3)
+                        save_edits=gr.Button('Save changes',variant='primary')
+                        gr.Markdown('Updates audio tags and filename. The narration, chapter markers and cover are preserved.')
+                    trash_button=gr.Button('Move selected generation to Trash',variant='stop')
+                    library_feedback=gr.Markdown()
+            with gr.Accordion('Trash · restore deleted generations',open=False):
+                trash_list=gr.Dropdown(choices=catalog.trash_choices(),label='Deleted generations')
+                restore_button=gr.Button('Restore selected generation')
+                gr.Markdown('Trash keeps files recoverable. Saved narration passages stay available for resume. To free disk space permanently, remove the relevant files from the local audiobooks folder after checking your backups.')
+            gr.Markdown('Older M4B and MP3 generations appear automatically. Selecting a book prepares a short excerpt; the complete file is available above.')
 
-    model_label.change(update_model, model_label, [voice, reference, tone_panel, model_help])
-    style.change(set_style, style, instructions)
-    book.change(inspect_chapters, [book, first_page, last_page, chapter_pages], [chapters, chapter_info])
-    book.change(cover_preview, [book, cover_file], [cover_image, cover_info])
-    cover_file.change(cover_preview, [book, cover_file], [cover_image, cover_info])
-    for setting in [first_page, last_page, chapter_pages]:
-        setting.change(inspect_chapters, [book, first_page, last_page, chapter_pages], [chapters, chapter_info])
-    saved.change(select_saved_preview, saved, saved_player)
-    saved_book.change(select_saved_preview, saved_book, saved_download)
-    args = [book, cover_file, chapters, model_label, voice, reference, first_page, last_page,
-            chapter_pages, chunk_chars, instructions, seed, output_format,
-            audition_text, audition_from_book]
-    outs = [status, audio, output, library, saved]
-    audition_event = audition_button.click(audition, args, outs, concurrency_id="gpu", concurrency_limit=1)
-    book_event = go_button.click(generate_book, args, outs, concurrency_id="gpu", concurrency_limit=1)
-    stop_button.click(stop_job, outputs=status, cancels=[audition_event, book_event], queue=False)
-    book_event.then(lambda: gr.update(choices=completed_books()), outputs=saved_book)
-    refresh.click(
-        lambda: (recent_books(), gr.update(choices=samples()), gr.update(choices=completed_books())),
-        outputs=[library, saved, saved_book],
-    )
+    model.change(update_model,model,[voice,reference,tone_panel,model_help],queue=False)
+    style.change(lambda value:STYLES[value],style,instructions,queue=False)
+    for trigger in [book,first_page,last_page,chapter_pages]:
+        trigger.change(inspect_chapters,[book,first_page,last_page,chapter_pages],[chapters,chapter_data,chapter_info],show_progress='minimal')
+    chapter_data.change(selection_changed,[chapter_data,chapters],[chapter_info,extracted],queue=False)
+    chapters.change(selection_changed,[chapter_data,chapters],[chapter_info,extracted],queue=False)
+    select_all.click(lambda data:gr.update(value=[x['id'] for x in data]),chapter_data,chapters,queue=False)
+    select_none.click(lambda:gr.update(value=[]),outputs=chapters,queue=False)
+    book.change(cover_preview,[book,cover],[cover_image,cover_info],show_progress='minimal')
+    cover.change(cover_preview,[book,cover],[cover_image,cover_info],show_progress='minimal')
+    args = [book,cover,chapters,model,voice,reference,first_page,last_page,chapter_pages,chunk_chars,
+            instructions,seed,output_format,audition_text,from_book,speed,passage_gap,chapter_gap,normalize,bitrate]
+    go.click(start_book,args,queue=False,api_name='start_book',show_progress='hidden')
+    preview.click(start_preview,args,queue=False,api_name='start_preview',show_progress='hidden')
+    stop.click(MANAGER.stop,queue=False,api_name='stop_job',show_progress='hidden')
+    resume.click(resume_job,queue=False,api_name='resume_job',show_progress='hidden')
+    samples_button.click(build_samples,args,queue=False,api_name='build_voice_samples',show_progress='hidden')
+    for control in (model,voice):
+        control.change(saved_voices,[model,voice],saved_voice,queue=False)
+    saved_voice.change(saved_voice_audio,saved_voice,[sample_player,sample_text],show_progress='minimal')
+    filters=[library_search,library_kind,library_sort]
+    for control in filters:
+        control.change(library_choices,filters,library_list,queue=False)
+    refresh.click(library_choices,filters,library_list,queue=False).then(lambda:gr.update(choices=catalog.trash_choices(),value=None),outputs=trash_list,queue=False)
+    selection_outputs=[library_cover,library_info,library_player,library_download,edit_title,edit_author,edit_filename,edit_notes,library_passage,excerpt_start]
+    library_list.change(library_select,library_list,selection_outputs,api_name='library_select',show_progress='minimal')
+    excerpt_button.click(play_excerpt,[library_list,excerpt_start,excerpt_length],library_player,api_name='play_excerpt')
+    save_edits.click(save_library,[library_list,edit_title,edit_author,edit_filename,edit_notes,*filters],[library_list,library_feedback],api_name='save_library').then(saved_voices,[model,voice],saved_voice,queue=False)
+    trash_button.click(trash_library,[library_list,*filters],[library_list,trash_list,library_feedback],api_name='trash_library').then(saved_voices,[model,voice],saved_voice,queue=False)
+    restore_button.click(restore_library,[trash_list,*filters],[library_list,trash_list,library_feedback],api_name='restore_library').then(saved_voices,[model,voice],saved_voice,queue=False)
+    seen = gr.State({})
+    poll_outputs = [status,chapter_status,logs,go,preview,stop,resume,result_group,book_audio,download,preview_audio,library_list,saved_voice,samples_button,seen]
+    poll_inputs=[seen,*filters,model,voice]
+    timer = gr.Timer(1.0)
+    timer.tick(poll_ui,poll_inputs,poll_outputs,queue=False,show_progress='hidden',api_name='job_status')
+    demo.load(poll_ui,poll_inputs,poll_outputs,queue=False,show_progress='hidden')
 
-if __name__ == "__main__":
-    demo.queue(default_concurrency_limit=1).launch(
-        server_name="127.0.0.1", server_port=7860,
-        inbrowser=True, show_error=True, max_file_size="100mb",
-        allowed_paths=[str(LIBRARY)], theme=gr.themes.Soft(), css=CSS,
-    )
+if __name__ == '__main__':
+    demo.queue(default_concurrency_limit=2).launch(server_name='127.0.0.1',server_port=7860,
+        inbrowser=True,show_error=True,max_file_size='100mb',allowed_paths=[str(LIBRARY)],
+        theme=gr.themes.Soft(primary_hue='sky',neutral_hue='slate'),css=CSS)
