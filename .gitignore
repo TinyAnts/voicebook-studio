@@ -1,0 +1,12 @@
+.venv-*/
+__pycache__/
+*.pyc
+audiobooks/
+.gradio/
+.env
+.env.*
+*.log
+*.key
+*.pem
+.DS_Store
+hf_space/.cache/
