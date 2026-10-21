@@ -21,6 +21,6 @@ jobs:
           python -m pip install -U pip
           python -m pip install -r requirements-ui.txt numpy
       - name: Syntax check
-        run: python -m compileall -q app.py core.py worker.py jobs.py dashboard.py export_audio.py library_store.py naming.py hf_space/app.py
+        run: python -m compileall -q app.py core.py worker.py jobs.py dashboard.py export_audio.py library_store.py naming.py theme.py hf_space/app.py
       - name: Unit tests including embedded cover artwork and chapter encoding
         run: python -m unittest discover -s tests -v

@@ -7,12 +7,15 @@ VOICEBOOK STUDIO - UPDATE YOUR EXISTING APP
    Choose "Replace the files in the destination" when Windows asks.
    Keep audiobooks and every .venv-* folder. Do not delete the existing folder.
    Do not put a second VoicebookStudio folder inside the first.
-5. Double-click start.bat in the existing folder.
+5. Double-click start.bat in the existing folder. If the old page is still open,
+   press Ctrl+F5 after restarting to reload the new theme.
 
 No new model installation is required for this update.
 If you choose a model you have never installed, use its optional installer.
 
 WHAT IS NEW
+- Warm charcoal theme with cream text and terracotta accents.
+- Fixed the repeated empty-search NoneType/casefold refresh error.
 - Live conversion monitor, useful progress, elapsed time, narration estimate,
   chapter activity, backend log, Stop and Resume.
 - Reading speed, pauses, export quality and consistent volume.

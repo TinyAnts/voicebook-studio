@@ -57,6 +57,10 @@ def detail(value):
 
 
 def entries(query='', kind='All', sort='Newest first'):
+    # Gradio can send None for untouched or cleared text/dropdown inputs.
+    query = str(query or '').casefold().strip()
+    kind = kind or 'All'
+    sort = sort or 'Newest first'
     with LOCK:
         items=[]
         for folder in LIBRARY.iterdir():
@@ -72,7 +76,7 @@ def entries(query='', kind='All', sort='Newest first'):
                 if kind!='All' and item['kind']!=kind:
                     continue
                 haystack=' '.join(str(item[x]) for x in ('title','author','model','voice','filename')).casefold()
-                if query.casefold().strip() not in haystack:
+                if query not in haystack:
                     continue
                 items.append(item)
         if sort=='Title A–Z':items.sort(key=lambda x:x['title'].casefold())

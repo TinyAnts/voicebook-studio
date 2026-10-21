@@ -14,6 +14,7 @@ from dashboard import render_chapters, render_status
 from jobs import MANAGER, read_log
 import library_store as catalog
 from naming import MODEL_NAMES
+from theme import CSS, THEME
 
 MODELS = {
     'Qwen3-TTS 1.7B — quality': 'qwen17',
@@ -226,34 +227,6 @@ def poll_ui(seen,query="",kind="All",sort="Newest first",model=list(MODELS)[0],v
     )
 
 
-CSS = '''
-.gradio-container {max-width:1260px!important;margin:auto!important;--block-radius:14px;}
-#masthead {display:flex;justify-content:space-between;align-items:center;padding:18px 4px 12px;gap:20px}
-#masthead h1{font-size:27px;margin:0;color:#183a54} #masthead p{margin:4px 0;color:#5b6d7d}
-.local-badge,.job-kind{border-radius:20px;padding:6px 12px;background:#e8f2f7;color:#205c79;font-size:12px;font-weight:650;white-space:nowrap}
-.job-card{border:1px solid #d8e5ed;border-radius:16px;padding:22px 25px;background:var(--block-background-fill,#fff);box-shadow:0 4px 20px #14334a07}
-.job-card h2{font-size:22px!important;margin:5px 0 8px!important;overflow-wrap:anywhere}
-.job-top{display:flex;justify-content:space-between;align-items:start;gap:12px}
-.eyebrow{font-size:11px;font-weight:750;letter-spacing:1.4px;color:#286b91}
-.job-card.failed{border-color:#ce5858}.job-card.failed .eyebrow{color:#b82929}.job-card.done{border-color:#6aa787}
-.job-settings,.worker-line,.job-foot{font-size:12px;color:var(--body-text-color-subdued,#526777)}
-.stages{display:flex;gap:12px;justify-content:space-between;flex-wrap:wrap;margin:18px 0}
-.step{display:flex;gap:7px;align-items:center;font-size:12px;color:#778898}.step b{border-radius:50%;background:#edf1f5;width:23px;height:23px;display:grid;place-items:center}
-.step.active{font-weight:700;color:#17658c}.step.active b{background:#17658c;color:white}.step.finished{color:#327556}.step.finished b{background:#e4f3ea}
-.progress-label{display:flex;justify-content:space-between;gap:14px;font-size:13px;margin-bottom:7px}
-.job-progress{display:block;width:100%;height:10px;accent-color:#2b7da8;border:0;border-radius:12px;overflow:hidden;background:#e7eef3}
-.job-progress::-webkit-progress-bar{background:#e7eef3;border-radius:12px}.job-progress::-webkit-progress-value{background:#2b7da8;border-radius:12px;transition:width .4s}.job-progress::-moz-progress-bar{background:#2b7da8}
-.job-progress:not([value]){background:linear-gradient(90deg,#e7eef3 20%,#5ca2c4 50%,#e7eef3 80%);background-size:200% 100%;animation:working 2s linear infinite}
-@keyframes working{to{background-position:-200% 0}}@media(prefers-reduced-motion:reduce){.job-progress{animation:none!important;transition:none!important}}
-.job-message{font-size:13px;margin:10px 0;white-space:pre-wrap;overflow-wrap:anywhere}
-.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding:13px 0;border-top:1px solid #e7eef3;border-bottom:1px solid #e7eef3;margin:12px 0}
-.metric span{display:block;font-size:11px;color:var(--body-text-color-subdued,#526777);margin-bottom:4px}.metric strong{font-size:17px}
-.current-passage{font-size:12px;margin:12px 0;padding:10px 12px;background:var(--background-fill-secondary,#f3f7fa);border-left:3px solid #75abc6;border-radius:4px}.current-passage p{margin:5px 0 0;line-height:1.5}
-.worker-line{line-height:1.7}.job-foot{font-size:11px;margin-top:7px}
-#library-list{max-height:460px;overflow-y:auto}#library-detail{overflow-wrap:anywhere;font-size:13px}#library-detail h3{font-size:22px}#library-list label{white-space:normal}\n#chapter-selector{max-height:280px;overflow-y:auto}.chapter-table{max-height:280px;overflow:auto}.chapter-table table{border-collapse:collapse;width:100%;font-size:12px}.chapter-table th,.chapter-table td{text-align:left;padding:9px;border-bottom:1px solid #e1e8ee}
-#job-actions{margin:0 0 6px}.section-heading{margin:6px 0!important}.muted{color:#60778b;font-size:13px}
-@media(max-width:640px){#masthead{align-items:start}.local-badge{display:none}.job-card{padding:16px}.metrics{grid-template-columns:repeat(2,1fr)}.stages{gap:8px}.step{font-size:11px}.metric strong{font-size:15px}}
-'''
 
 with gr.Blocks(title='Voicebook Studio') as demo:
     gr.HTML('<header id="masthead"><div><h1>Voicebook Studio</h1><p>Your books. Your narrator. At your pace.</p></div><span class="local-badge">Runs on your computer</span></header>')
@@ -265,7 +238,7 @@ with gr.Blocks(title='Voicebook Studio') as demo:
     with gr.Accordion('Chapter progress & backend activity', open=False):
         chapter_status = gr.HTML(render_chapters(MANAGER.snapshot()))
         logs = gr.Textbox(label='Live activity log', lines=5, max_lines=8, interactive=False)
-    with gr.Group(visible=False) as result_group:
+    with gr.Column(visible=False,elem_id='conversion-result') as result_group:
         gr.Markdown('### Your audiobook is ready')
         book_audio = gr.Audio(label='Listen to a short excerpt', type='filepath', interactive=False)
         download = gr.File(label='Download your complete audiobook')
@@ -306,7 +279,7 @@ with gr.Blocks(title='Voicebook Studio') as demo:
                         style = gr.Dropdown(choices=list(STYLES),value=list(STYLES)[0],label='Tone · Qwen 1.7B')
                         instructions = gr.Textbox(value=STYLES[list(STYLES)[0]], lines=3, label='Custom narration direction')
                     with gr.Accordion('Saved voice samples · replay instantly',open=True):
-                        saved_voice = gr.Dropdown(choices=catalog.voice_choices('qwen17','Aiden'),label='Samples for this narrator')
+                        saved_voice = gr.Dropdown(choices=catalog.voice_choices('qwen17','Aiden'),value=None,label='Samples for this narrator')
                         sample_player = gr.Audio(label='Play saved voice sample',type='filepath',interactive=False)
                         sample_text = gr.Textbox(label='Passage read in this sample',lines=2,interactive=False)
                         samples_button = gr.Button('Create missing voice samples for this model',size='sm')
@@ -330,11 +303,11 @@ with gr.Blocks(title='Voicebook Studio') as demo:
                         seed = gr.Number(value=42,precision=0,label='Random seed')
                         gr.Markdown('Changing the voice, style, passage size or seed creates new narration. Speed, pauses and export quality reuse saved narration.')
             gr.Markdown('Changes apply to the **next** job. The monitor shows the settings used by the running job. You may refresh this page while a job runs; keep the app terminal open.')
-        with gr.Tab('Library · books & previews'):
+        with gr.Tab('Library'):
             with gr.Row():
                 with gr.Column(scale=4,min_width=290):
                     gr.Markdown('### Your generations')
-                    library_search=gr.Textbox(label='Search books, voices or filenames',placeholder='Find a saved generation…')
+                    library_search=gr.Textbox(value='',label='Search books, voices or filenames',placeholder='Find a saved generation…')
                     library_kind=gr.Radio(['All','Audiobook','Voice preview'],value='All',label='Show')
                     library_sort=gr.Dropdown(['Newest first','Oldest first','Title A–Z'],value='Newest first',label='Sort')
                     refresh=gr.Button('Refresh library',size='sm')
@@ -405,4 +378,4 @@ with gr.Blocks(title='Voicebook Studio') as demo:
 if __name__ == '__main__':
     demo.queue(default_concurrency_limit=2).launch(server_name='127.0.0.1',server_port=7860,
         inbrowser=True,show_error=True,max_file_size='100mb',allowed_paths=[str(LIBRARY)],
-        theme=gr.themes.Soft(primary_hue='sky',neutral_hue='slate'),css=CSS)
+        theme=THEME,css=CSS)

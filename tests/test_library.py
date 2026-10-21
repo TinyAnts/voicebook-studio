@@ -41,6 +41,11 @@ class TestLibrary(unittest.TestCase):
     def tearDown(self):
         self.patch.stop();self.temp.cleanup()
 
+    def test_unset_or_cleared_filters_show_saved_files(self):
+        self.assertEqual(catalog.choices(None,None,None),catalog.choices())
+        self.assertEqual(catalog.choices('   '),catalog.choices())
+        self.assertEqual(len(catalog.entries('  ORIGINAL BOOK  ')),2)
+
     def test_old_generation_plays_and_metadata_rename_preserves_chapters_cover_audio(self):
         self.assertEqual(len(catalog.entries()),2)
         self.assertEqual(catalog.detail(self.book)['title'],'Original Book')

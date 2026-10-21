@@ -10,3 +10,6 @@ audiobooks/
 *.pem
 .DS_Store
 hf_space/.cache/
+
+# Developer browser-review output
+visual-review/

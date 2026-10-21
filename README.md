@@ -9,17 +9,29 @@
 3. **Double-click `start.bat`**. Your browser opens at **http://127.0.0.1:7860**.
 4. Choose a model, then click **Create missing voice samples for this model** to save the same passage for its built-in voices. Switch narrators and replay saved samples instantly. You can also generate a custom preview; no book is required.
 5. Upload a **PDF or EPUB**, tick or untick the chapters to convert, check the **book cover preview** (or upload custom artwork), select **Fiction** or **Nonfiction**, and set reading speed, and click **Create audiobook**. Follow the live monitor above the form.
-6. Play the sample and download your final **M4B** (chapter markers) or **MP3**. Open **Library · books & previews** to play older files, rename them, edit their title/author/notes, or move them to recoverable Trash. Jobs are saved in the `audiobooks` folder; rerunning the same job resumes missing passages.
+6. Play the sample and download your final **M4B** (chapter markers) or **MP3**. Open **Library** to play older files, rename them, edit their title/author/notes, or move them to recoverable Trash. Jobs are saved in the `audiobooks` folder; rerunning the same job resumes missing passages.
 
 **More voices (optional):** Double-click `install-chatterbox.bat` for **Chatterbox Multilingual V3** and **Chatterbox Turbo**, or `install-kokoro.bat` for very fast **Kokoro-82M**. Chatterbox requires a **6–15-second voice-reference recording**, such as your own voice, or an authorized narrator's recording. You may need to install [Git for Windows](https://git-scm.com/downloads/win) for Chatterbox dependencies, and [espeak-ng](https://github.com/espeak-ng/espeak-ng/releases) for Kokoro.
 
 **If Qwen3-TTS 1.7B exceeds 8 GB GPU memory**, use **Qwen3-TTS 0.6B** in the model dropdown; that backend is installed by the same `install.bat`. High-quality synthesis may be much slower than reading time. Your computer must remain on while generating a book.
+
+## Continuing development with Claude
+
+Open [CLAUDE_HANDOFF.md](CLAUDE_HANDOFF.md) for architecture, completed fixes, test commands, data-preservation notes and remaining work. The handoff is included in every full source ZIP.
 
 ## Updating your existing installation
 
 1. Stop any conversion and close the app terminal.
 2. Extract the new ZIP and copy the **contents of `VoicebookStudio`** into your existing app folder. Choose **Replace files** when asked. Keep the existing `audiobooks` folder and all `.venv-*` folders; do not delete the old app folder or nest another `VoicebookStudio` folder inside it.
 3. Double-click your existing `start.bat`. **No model reinstall is needed for this update.** Your old exports and saved passages remain available. The complete steps are also in `UPDATE_WINDOWS.txt`.
+
+## Warm dark theme and refresh fix
+
+The app uses a Claude-inspired warm charcoal palette with cream text, terracotta actions and muted green completion states. The palette stays consistent under both light and dark OS/browser preferences. Header text, stage labels, helper text, inputs, disabled controls, dropdown menus and audio players use readable foreground/background pairs. Menus have opaque backgrounds and small screens use a wrapping layout.
+
+This update also fixes repeated `NoneType ... casefold` errors during status refresh: untouched or cleared library search/filter values now use safe defaults. Generated audio is not modified by this fix.
+
+The theme was reviewed from Chromium screenshots of conversion, chapter details, completed output, library editing, dropdowns, loading and errors, at desktop and 390px phone widths. Six screen states passed axe-core text-contrast checks; icon-only markers were checked visually. This is targeted visual/contrast QA, not a claim of complete accessibility certification.
 
 ## A clearer workspace
 
@@ -101,7 +113,7 @@ Use the private HTTPS URL given by Tailscale from your connected phone; the lapt
 - The models generate speech in ~320-character chunks and cache WAV output. Very long books need substantial disk space, and occasional mispronunciations/repeated words can require rerunning a passage/chapter.
 - Each Chatterbox recording should be a **clean, authorized** 6–15 second clip. Voice cloning should not impersonate someone without consent.
 - DRM removal is not supported. Only narrate books you are permitted to process; personal listening does not automatically authorize redistributing generated audiobooks.
-- This update was tested with actual FFmpeg encoding, metadata/cover/chapter preservation, cached export, sample reuse, job cancellation/resume, and Gradio event/API calls. Model lifecycle tests use a small test worker; this update was not run against a real GPU or Windows installation here. Browser visual review was unavailable in the build environment. Your installed model backends remain independent.
+- This update was tested with actual FFmpeg encoding, metadata/cover/chapter preservation, cached export, sample reuse, job cancellation/resume, and Gradio event/API calls. Model lifecycle tests use a small test worker; this update was not run against a real GPU or Windows installation here. The new theme was visually checked in Chromium; GPU inference and a native Windows launch were not run here. Your installed model backends remain independent.
 
 ## Technical layout
 
@@ -115,6 +127,7 @@ voicebook_studio/
 ├── export_audio.py              # Streaming speed/pause/cover/chapter export
 ├── library_store.py             # Playback, metadata editing, Trash/restore
 ├── naming.py                    # Readable Windows-safe output names
+├── theme.py                     # Shared charcoal/cream/terracotta theme
 ├── requirements-ui.txt
 ├── install.bat / start.bat      # Double-click install / launch
 ├── install-chatterbox.bat       # Optional custom narrator backend
@@ -133,6 +146,16 @@ Model sources and licenses: [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) (Ap
 ```sh
 python -m pip install -r requirements-ui.txt
 python -m unittest discover -s tests -v
-python -m compileall -q app.py core.py worker.py jobs.py dashboard.py export_audio.py library_store.py naming.py
+python -m compileall -q app.py core.py worker.py jobs.py dashboard.py export_audio.py library_store.py naming.py theme.py
 python tests/smoke_ui.py
 ```
+
+Optional browser review (developer tooling only; not needed to run the app):
+
+```sh
+python -m pip install playwright
+python -m playwright install chromium
+python tests/visual_review.py
+```
+
+This creates temporary synthetic book/audio fixtures and local screenshots in `visual-review/`. To also run contrast checks, set `VOICEBOOK_AXE_SCRIPT` to a local axe-core `axe.min.js` before running the script. Screenshots are review fixtures, not recordings generated by a voice model.

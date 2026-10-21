@@ -17,7 +17,7 @@ with tempfile.TemporaryDirectory() as d:
     try:
         app.demo.queue().launch(server_name='127.0.0.1',server_port=7861,prevent_thread_lock=True,
                                inbrowser=False,quiet=True,allowed_paths=[str(core.LIBRARY)],css=app.CSS,
-                               theme=app.gr.themes.Soft(primary_hue='sky',neutral_hue='slate'))
+                               theme=app.THEME)
         client=Client('http://127.0.0.1:7861',verbose=False)
         initial=client.predict('', 'All', 'Newest first', list(app.MODELS)[0], 'Aiden', api_name='/job_status')
         assert 'READY WHEN YOU ARE' in initial[0]
@@ -37,6 +37,8 @@ with tempfile.TemporaryDirectory() as d:
         fresh=Client('http://127.0.0.1:7861',verbose=False)
         assert 'READY TO LISTEN' in fresh.predict('', 'All', 'Newest first', list(app.MODELS)[0], 'Aiden', api_name='/job_status')[0]
         assert Path(s['output']).is_file()
+        untouched=Client('http://127.0.0.1:7861',verbose=False)
+        assert 'READY TO LISTEN' in untouched.predict(None,'All','Newest first',list(app.MODELS)[0],'Aiden',api_name='/job_status')[0]
         selected=client.predict(s['output'],api_name='/library_select')
         assert 'ui-smoke' in selected[1]
         updated=client.predict(s['output'],'Smoke Test Book','Test Author','Readable Test Book','Test note','','All','Newest first',api_name='/save_library')
