@@ -33,7 +33,7 @@ def render_status(s, now=None):
     done = s.get('completed', 0)
     fraction = done/total if total else 0
     if state == 'idle':
-        return '<section class="job-card"><div class="eyebrow">READY WHEN YOU ARE</div><h2>Your next audiobook starts here.</h2><p>Add a book below, choose a narrator, and listen to a preview before you begin.</p></section>'
+        return '<section class="job-card"><div class="eyebrow">READY WHEN YOU ARE</div><h2>Your next audiobook starts here.</h2><p>Choose a book, pick a narrator and listen to a preview. Then press <strong>Create audiobook</strong> — progress appears here.</p></section>'
     stages = [('prepare', 'Prepare book'), ('loading', 'Load voice'), ('narrating', 'Narrate'), ('export', 'Export audio')]
     position = ['prepare', 'loading', 'narrating', 'export', 'sample'].index(stage)
     steps = []
@@ -65,13 +65,18 @@ def render_status(s, now=None):
     estimate = ('About ' + duration(eta)) if eta and eta >= 1 else ('Learning your speed…' if stage == 'narrating' and busy and s.get('generated_count', 0)<2 else 'Recalculating…' if stage == 'narrating' and busy else '—')
     chapter_done = sum(c['done']==c['total'] for c in s.get('chapters', []))
     chapter_count = len(s.get('chapters', []))
+    rate = s.get('generated_audio_seconds', 0) / s['generated_seconds'] if s.get('generated_seconds') else 0
+    speed = f'{rate:.2f}× real time' if rate else '—'
     metrics = [('Elapsed',elapsed), ('Narration remaining*',estimate),
-               ('Passages saved',f'{done:,} / {total:,}'), ('Chapters narrated',f'{chapter_done} / {chapter_count}')]
+               ('Passages saved',f'{done:,} / {total:,}'), ('Chapters narrated',f'{chapter_done} / {chapter_count}'),
+               ('Narration speed',speed)]
     metric_html = ''.join(f'<div class="metric"><span>{label}</span><strong>{esc(value)}</strong></div>' for label,value in metrics)
     statuses = {'running':'IN PROGRESS','stopping':'STOPPING','stopped':'STOPPED · SAVED','failed':'NEEDS ATTENTION','done':'READY TO LISTEN'}
     current = ''
     if stage == 'narrating' and busy and s.get('excerpt'):
-        current = f'<div class="current-passage"><strong>Reading: {esc(s.get("current_chapter", ""))}</strong><p>{esc(s["excerpt"][:350])}{"…" if len(s["excerpt"])>350 else ""}</p></div>'
+        more = s.get('current_batch', 1) - 1
+        reading = esc(s.get("current_chapter", "")) + (f' · plus {more} more passage{"s" if more > 1 else ""} in this GPU batch' if more > 0 else '')
+        current = f'<div class="current-passage"><strong>Reading: {reading}</strong><p>{esc(s["excerpt"][:220])}{"…" if len(s["excerpt"])>220 else ""}</p></div>'
     heartbeat = ''
     if busy:
         age = now - s.get('last_progress_at', now)
@@ -79,14 +84,19 @@ def render_status(s, now=None):
         if stage in ('loading', 'narrating'):
             heartbeat = ('Worker signal ' + duration(now-signal) + ' ago' if signal else 'Waiting for worker to start')
             heartbeat += ' · last progress update ' + duration(age) + ' ago'
-            if age > 90:
+            if age > max(120, 45 * s.get('batch_size', 1)):
                 heartbeat += ' · No recent progress; the process may still be busy. Check the activity log below.'
         elif stage in ('export','sample'):
             heartbeat = 'Encoding locally · last progress update ' + duration(age) + ' ago'
-    settings = f'{s.get("model", "")} · {s.get("voice", "")} · {s.get("speed", 1):g}× export speed'
+    if busy and s.get('warning'):
+        heartbeat += (' · ' if heartbeat else '') + '⚠ ' + s['warning']
+    from naming import MODEL_NAMES
+    settings = f'{MODEL_NAMES.get(s.get("model", ""), s.get("model", ""))} · {s.get("voice", "")} · {s.get("speed", 1):g}× export speed'
     if s.get('sample_total',1)>1:
         settings += f' · Voice sample {s["sample_index"]} of {s["sample_total"]}'
     device = s.get('device', '')
+    if s.get('engine'):
+        device += f" · Engine: {s['engine']}" + (f" · {s.get('batch_size', 1)} passages per batch" if s.get('batch_size', 1) > 1 else '')
     if s.get('vram_used_gb') is not None:
         device += f' · {s["vram_used_gb"]:.1f} GB reserved by voice model'
     foot = f'{s.get("cached", 0)} cached passages reused. *Estimate covers narration only; model loading and export are separate.'

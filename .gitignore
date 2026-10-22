@@ -13,3 +13,8 @@ hf_space/.cache/
 
 # Developer browser-review output
 visual-review/
+
+# Local safety copies made during updates
+_backup-*/
+
+fish-location.txt

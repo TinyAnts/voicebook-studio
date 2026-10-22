@@ -1,0 +1,8 @@
+{
+  "id": "victoria",
+  "name": "Victoria",
+  "label": "middle-aged woman \u00b7 50s \u00b7 crisp British literary",
+  "description": "A British woman in her fifties with a crisp, elegant, authoritative voice. Literary audiobook narrator with poise and quiet intensity, perfect enunciation.",
+  "ref_text": "The old house at the end of the lane had stood empty for many years. Each autumn, the leaves gathered on its steps, and the village children wondered who had lived there, and why they had never come back.",
+  "source": "Qwen3-TTS-12Hz-1.7B-VoiceDesign (synthetic voice)"
+}

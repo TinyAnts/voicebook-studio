@@ -15,9 +15,93 @@ def _escape(value):
     return str(value).replace('\\', '\\\\').replace('=', '\\=').replace(';', '\\;').replace('#', '\\#').replace('\n', ' ')
 
 
+def speech_gain_db(paths, target_db=-20.0):
+    """Gain (dB) that brings the book's speech level to about -20 dBFS RMS (~ -18 LUFS for speech).
+
+    Reads each WAV once with NumPy; ignores pauses (frames quieter than -45 dBFS).
+    """
+    import soundfile as sf
+    power, count = 0.0, 0
+    for path in dict.fromkeys(str(p) for p in paths):
+        try:
+            data, sr = sf.read(path, dtype='float32', always_2d=True)
+        except Exception:
+            continue
+        mono = data.mean(axis=1)
+        frame = max(1, int(sr * 0.05))
+        usable = len(mono) // frame * frame
+        if not usable:
+            continue
+        frames = (mono[:usable].reshape(-1, frame) ** 2).mean(axis=1)
+        voiced = frames[frames > 10 ** (-45 / 10)]
+        power += float(voiced.sum())
+        count += int(voiced.size)
+    if not count:
+        return 0.0
+    level = 10 * math.log10(power / count)
+    return max(-12.0, min(12.0, target_db - level))
+
+
+def split_chapters(book, out_dir, *, title, author='', comment='', cover=None, fmt=None, bitrate=128,
+                   on_process=None, cancel_event=None):
+    """Cut one file per chapter from a finished M4B/MP3 using stream copy (seconds, not minutes).
+
+    Uses the chapter times saved next to the book. Returns the created paths in order.
+    """
+    import json
+    import re
+    from core import ffmpeg_binary
+    book = Path(book)
+    marks = json.loads(book.with_suffix('.chapters.json').read_text(encoding='utf-8'))
+    out_dir.mkdir(parents=True, exist_ok=True)
+    ext = '.' + (fmt or book.suffix.lstrip('.')).lower()
+    copy = ext == book.suffix.lower()   # same format: no re-encoding, takes seconds
+    created = []
+    total = len(marks)
+    for n, mark in enumerate(marks, 1):
+        if cancel_event is not None and cancel_event.is_set():
+            raise ExportCancelled('Stopped; completed narration is saved.')
+        name = re.sub(r'^\d+\s*·\s*', '', str(mark['title'])).strip() or f'Chapter {n}'
+        from naming import clean_name
+        target = out_dir / f'{n:02d} - {clean_name(name, 80)}{ext}'
+        partial = target.with_name(target.stem + '.partial' + ext)
+        length = max(0.05, float(mark['end']) - float(mark['start']))
+        cmd = [ffmpeg_binary(), '-hide_banner', '-loglevel', 'error', '-nostdin', '-y',
+               '-ss', f"{float(mark['start']):.3f}", '-t', f'{length:.3f}', '-i', str(book)]
+        art = cover if cover and Path(cover).is_file() else None
+        if art:
+            cmd += ['-i', str(art)]
+        codec = ['copy'] if copy else (['aac', '-b:a', f'{int(bitrate)}k'] if ext == '.m4b'
+                                        else ['libmp3lame', '-b:a', f'{int(bitrate)}k'])
+        cmd += ['-map', '0:a:0', '-c:a', *codec, '-map_metadata', '-1', '-map_chapters', '-1']
+        if art:
+            cmd += ['-map', '1:v:0', '-c:v', 'mjpeg', '-disposition:v:0', 'attached_pic']
+        for key, value in (('title', name), ('album', title), ('artist', author or 'Voicebook Studio'),
+                           ('album_artist', author or 'Voicebook Studio'), ('track', f'{n}/{total}'),
+                           ('genre', 'Audiobook'), ('comment', comment)):
+            if value:
+                cmd += ['-metadata', f'{key}={value}']
+        cmd += (['-f', 'ipod'] if ext == '.m4b' else ['-id3v2_version', '3', '-f', 'mp3']) + [str(partial)]
+        proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True,
+                                encoding='utf-8', errors='replace')
+        if on_process:
+            on_process(proc)
+        try:
+            _out, err = proc.communicate()
+        finally:
+            if on_process:
+                on_process(None)
+        if proc.returncode or not partial.is_file():
+            partial.unlink(missing_ok=True)
+            raise RuntimeError(f'Could not create chapter file {target.name}: {err[-500:]}')
+        partial.replace(target)
+        created.append(target)
+    return created
+
+
 def export_audio(folder, pieces, destination, title, cover=None, *, speed=1.0,
                  passage_gap=0.0, chapter_gap=0.0, normalize=True, bitrate=128,
-                 on_progress=None, on_process=None, cancel_event=None):
+                 on_progress=None, on_process=None, cancel_event=None, author='', comment=''):
     from core import _ffconcat_path, ffmpeg_binary
     import soundfile as sf
 
@@ -68,10 +152,17 @@ def export_audio(folder, pieces, destination, title, cover=None, *, speed=1.0,
                 concat.append(f'file {_ffconcat_path(silence)}')
                 seconds += frames / info.samplerate / speed
     markers[-1][2] = seconds
+    # Chapter times are kept so chapter files can be cut from the finished book without re-encoding.
+    import json
+    destination.with_suffix('.chapters.json').write_text(
+        json.dumps([{'title': t, 'start': a, 'end': b} for t, a, b in markers], ensure_ascii=False, indent=1),
+        encoding='utf-8')
     # Distinct files keep the main export and short listening sample auditable.
     list_file = destination.with_suffix('.ffconcat')
     list_file.write_text('\n'.join(concat) + '\n', encoding='utf-8')
-    metadata = [';FFMETADATA1', f'title={_escape(title)}', 'artist=Voicebook Studio']
+    metadata = [';FFMETADATA1', f'title={_escape(title)}', f'album={_escape(title)}',
+                f'artist={_escape(author or "Voicebook Studio")}', f'album_artist={_escape(author or "Voicebook Studio")}',
+                'genre=Audiobook', f'comment={_escape(comment or "Narrated with Voicebook Studio")}']
     for heading, start, end in markers:
         metadata.extend(['[CHAPTER]', 'TIMEBASE=1/1000', f'START={round(start*1000)}',
                          f'END={round(end*1000)}', f'title={_escape(heading)}'])
@@ -88,12 +179,16 @@ def export_audio(folder, pieces, destination, title, cover=None, *, speed=1.0,
     if artwork.is_file():
         cmd.extend(['-map', '2:v:0', '-c:v', 'mjpeg', '-disposition:v:0', 'attached_pic',
                     '-metadata:s:v:0', 'title=Album cover', '-metadata:s:v:0', 'comment=Cover (front)'])
-    filters = [f'atempo={speed:.6f}']
+    filters = [f'atempo={speed:.6f}'] if abs(speed - 1) > 1e-6 else []
     if normalize:
-        filters.append('loudnorm=I=-18:TP=-2:LRA=11')
-        # Some FFmpeg builds emit NaNs for an entirely silent, very short input.
-        filters.append("aeval=exprs='if(isnan(val(ch)),0,clip(val(ch),-1,1))':c=same")
-    cmd.extend(['-map_metadata', '1', '-map_chapters', '1', '-af', ','.join(filters)])
+        # One measured gain for the whole book plus a peak limiter. Same listening level as the
+        # old single-pass loudnorm filter at about a third of the encoding time (loudnorm
+        # resamples everything to 192 kHz internally).
+        gain = speech_gain_db([p.wav for p in pieces])
+        filters.extend([f'volume={gain:.2f}dB', 'alimiter=limit=0.89:level=false'])
+    if not filters:
+        filters.append('anull')
+    cmd.extend(['-map_metadata', '1', '-map_chapters', '1', '-af', ','.join(filters), '-ar', '44100'])
     if destination.suffix.lower() == '.m4b':
         cmd.extend(['-c:a', 'aac', '-b:a', f'{int(bitrate)}k', '-f', 'ipod'])
     else:

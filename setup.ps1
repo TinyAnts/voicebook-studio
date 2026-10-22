@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('qwen','chatterbox','kokoro','all')]
+    [ValidateSet('qwen','qwenfast','all')]
     [string]$Model = 'qwen'
 )
 $ErrorActionPreference = 'Stop'
@@ -23,25 +23,25 @@ function Make-Env([string]$Name) {
     return $Python
 }
 
-Write-Host 'Installing Voicebook Studio user interface...' -ForegroundColor Cyan
-$Ui = Make-Env 'ui'
-Run-Checked $Ui @('-m','pip','install','-r','requirements-ui.txt')
+if ($Model -ne 'qwenfast' -or -not (Test-Path (Join-Path $PSScriptRoot '.venv-ui\Scripts\python.exe'))) {
+    Write-Host 'Installing Voicebook Studio user interface...' -ForegroundColor Cyan
+    $Ui = Make-Env 'ui'
+    Run-Checked $Ui @('-m','pip','install','-r','requirements-ui.txt')
+}
 
-$Models = if ($Model -eq 'all') { @('qwen','chatterbox','kokoro') } else { @($Model) }
+$Models = if ($Model -eq 'all') { @('qwen','qwenfast') } else { @($Model) }
 foreach ($Choice in $Models) {
     Write-Host "Installing $Choice model backend in its own Python environment..." -ForegroundColor Cyan
     $Py = Make-Env $Choice
-    if ($Choice -eq 'chatterbox') {
-        # Chatterbox pins PyTorch 2.6 and Transformers 5.2; isolate it from Qwen.
+    if ($Choice -eq 'qwen') {
         Run-Checked $Py @('-m','pip','install','torch==2.6.0','torchaudio==2.6.0','--index-url','https://download.pytorch.org/whl/cu124')
-        Run-Checked $Py @('-m','pip','install','chatterbox-tts==0.1.7','soundfile')
-    } elseif ($Choice -eq 'qwen') {
+        Run-Checked $Py @('-m','pip','install','qwen-tts==0.1.1','soundfile','hf_xet')
+    } elseif ($Choice -eq 'qwenfast') {
+        # Optional CUDA-graph engine for Qwen (several times faster per passage). It needs a newer
+        # Transformers than qwen-tts 0.1.1, so it gets its own environment; .venv-qwen stays as a fallback.
+        # Downloaded Qwen model files are shared through the Hugging Face cache (no second download).
         Run-Checked $Py @('-m','pip','install','torch==2.6.0','torchaudio==2.6.0','--index-url','https://download.pytorch.org/whl/cu124')
-        Run-Checked $Py @('-m','pip','install','qwen-tts==0.1.1','soundfile')
-    } elseif ($Choice -eq 'kokoro') {
-        Run-Checked $Py @('-m','pip','install','torch==2.6.0','torchaudio==2.6.0','--index-url','https://download.pytorch.org/whl/cu124')
-        Run-Checked $Py @('-m','pip','install','kokoro>=0.9.4','soundfile')
-        Write-Warning 'Kokoro also requires espeak-ng on Windows. See README.'
+        Run-Checked $Py @('-m','pip','install','faster-qwen3-tts==0.5.4','transformers==5.15.1','soundfile','hf_xet')
     }
     Run-Checked $Py @('-c',"import torch; print('CUDA available:', torch.cuda.is_available())")
 }

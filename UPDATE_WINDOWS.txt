@@ -10,20 +10,54 @@ VOICEBOOK STUDIO - UPDATE YOUR EXISTING APP
 5. Double-click start.bat in the existing folder. If the old page is still open,
    press Ctrl+F5 after restarting to reload the new theme.
 
-No new model installation is required for this update.
-If you choose a model you have never installed, use its optional installer.
+No reinstall is required. The first time you use a library narrator, the app
+downloads the Qwen 1.7B voice-cloning model once (about 4.5 GB). "Create a new
+narrator" downloads Qwen VoiceDesign once (about 4.5 GB). Nothing else changes.
 
-WHAT IS NEW
-- Warm charcoal theme with cream text and terracotta accents.
-- Fixed the repeated empty-search NoneType/casefold refresh error.
-- Live conversion monitor, useful progress, elapsed time, narration estimate,
-  chapter activity, backend log, Stop and Resume.
-- Reading speed, pauses, export quality and consistent volume.
-- Library: play older files, choose an excerpt start, download, rename,
-  edit title/author/notes, move to Trash and restore.
-- Readable book/chapter/narrator filenames; previews clearly marked.
-- Create missing voice samples once, then replay them instantly.
-  The first sample-bank setup generates speech using your installed model.
+OPTIONAL - FISH S2 PRO (4-bit) ENGINE
+  Needs Docker Desktop (GPU enabled). Double-click install-fish.bat once
+  (downloads ~5 GB model + builds a Docker image, 20-40 minutes). Then pick
+  "Speech engine: Fish S2 Pro" and a library narrator. stop-fish.bat frees the GPU.
+  Research / non-commercial licence.
+
+NEW IN THIS UPDATE (22 Oct 2026)
+- 12 narrators: Aiden and Ryan plus 10 library narrators of different ages, genders
+  and accents (Arthur, Eleanor, James, Claire, Henry, Victoria, Marcus, Sophie,
+  Grace, Priya). Pick them in the Narrator list.
+- Create a new narrator from a written description, or add your own recording.
+- Only Qwen3-TTS 1.7B remains. Qwen 0.6B, Chatterbox and Kokoro were removed.
+- Names: "Full book" instead of "Chapters 01-11", the author in the file name and tags,
+  44.1 kHz audio, "Show in folder" buttons.
+- Web-address watermarks and repeated page headers are no longer read aloud (new books).
+- update-github.bat uploads the app source to your GitHub repository.
+- Finished books now also go to audiobooks\Finished\<Title - Author>\ with the cover,
+  an About.txt, a "Full book" folder and a "Chapters" folder (one file per chapter).
+  Choose "Files to make" and "Chapter file format" in step 3. Exports are about 3x faster.
+
+OPTIONAL - EVEN FASTER QWEN (CUDA graphs)
+  Double-click install-qwen-fast.bat once (downloads ~3 GB of PyTorch into a new
+  .venv-qwenfast folder; the Qwen voice model itself is NOT downloaded again).
+  Restart start.bat. "Auto" then uses the fast engine and falls back to the batched
+  engine automatically if it fails on your PC.
+
+WHAT IS NEW (speed + bug fixes)
+- Qwen narrates several passages at once on the GPU ("Batched GPU"), sized to your
+  8 GB card automatically. If VRAM runs out it halves the batch and keeps going
+  instead of crashing or silently spilling into slow shared memory.
+- Optional CUDA-graph fast engine (install-qwen-fast.bat), with automatic fallback.
+- New "GPU speed" panel (section 3): choose the engine and passages per batch.
+- The monitor now shows "Narration speed" (x real time), the engine and batch size.
+- WAV files are written on a background thread so the GPU never waits for the disk.
+- Runaway passages are capped (the model default allowed 11 minutes of audio for one
+  passage, which could stall a whole run).
+- Changing the chapter selection no longer re-narrates text you already generated:
+  identical passages from earlier runs of the same book and voice are copied over.
+  This also works for the folders you already have.
+- "Create missing voice samples" loads the model once for all voices.
+- Cleared number boxes (page range, seed) no longer cause errors.
+- Quieter activity log (repeated pad_token_id and symlink warnings removed). The SoX and
+  flash-attn notices that remain are harmless.
+- If PyTorch cannot see the GPU, the monitor now says so clearly.
 
 Your existing books, audio and narration cache stay in audiobooks.
 Keep the terminal open while converting. Refreshing the browser is fine.

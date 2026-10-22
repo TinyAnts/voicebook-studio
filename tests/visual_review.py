@@ -43,7 +43,7 @@ state=dict(status='running',stage='narrating',job_id='visual-fixture',title='The
  generated_count=15,generated_chars=4400,generated_seconds=360,total_chars=14000,completed_chars=5400,
  current_started_at=time.monotonic()-8,last_progress_at=time.monotonic()-8,heartbeat_at=time.monotonic()-1,
  current_chapter='02 · Across the hills',excerpt='The farmhouse stood at the edge of a quiet valley. By morning, the clouds had cleared, and the first light moved across the hills.',
- device='NVIDIA GeForce RTX 3070',vram_used_gb=5.2,message='Saved passage 19 of 48. Narrating the next passage…',
+ device='NVIDIA GeForce RTX 3070',vram_used_gb=5.2,engine='batched GPU',batch_size=6,current_batch=6,generated_audio_seconds=420,message='Saved passage 19 of 48. Narrating the next passage…',
  chapters=[dict(title='01 · A New Beginning',done=12,total=12),dict(title='02 · Across the hills',done=7,total=16),dict(title='03 · Home again',done=0,total=20)])
 app.MANAGER.update(**state)
 app.demo.queue().launch(server_name='127.0.0.1',server_port=7863,prevent_thread_lock=True,inbrowser=False,quiet=True,
@@ -62,9 +62,9 @@ try:
   (OUT/'dom.txt').write_text(page.locator('body').inner_text())
   print('MAIN SCREEN',page.title(),flush=True)
   audit(page,'conversion')
-  page.get_by_text('Chapter progress & backend activity',exact=True).click()
+  page.get_by_text('Chapter progress & activity log',exact=True).click()
   page.screenshot(path=str(OUT/'02_progress_details.png'),full_page=True)
-  page.get_by_text('Chapter progress & backend activity',exact=True).click()
+  page.get_by_text('Chapter progress & activity log',exact=True).click()
   app.MANAGER.update(status='done',stage='sample',completed=48,finished_at=time.monotonic(),output=str(book),audio=str(preview),message='Your audiobook is ready to download.',chapters=[{**c,'done':c['total']} for c in state['chapters']])
   page.get_by_text('READY TO LISTEN',exact=True).wait_for()
   page.get_by_role('tab',name='Library').click()

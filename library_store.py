@@ -14,7 +14,7 @@ from pathlib import Path
 from core import LIBRARY, ffmpeg_binary
 
 LOCK = threading.RLock()
-RESERVED = {'_trash', '_cover-previews', '_audition-inputs', '_library-previews'}
+RESERVED = {'_trash', '_cover-previews', '_audition-inputs', '_library-previews', '_text-fixes', '_voices', 'Finished'}
 
 
 def _json(path, default=None):
@@ -53,6 +53,7 @@ def detail(value):
                 size_mb=path.stat().st_size/1024**2, modified=path.stat().st_mtime,
                 format=path.suffix[1:].upper(), chapters=book.get('chapters'),
                 excerpt=custom.get('excerpt',''),chapter_names=custom.get('chapter_names',[]),settings=custom.get('settings',{}),
+                finished_dir=custom.get('finished_dir',''),
                 cover=str(path.parent/'cover.jpg') if (path.parent/'cover.jpg').is_file() else None)
 
 
@@ -144,7 +145,7 @@ def edit(value, title, author, notes, filename):
                 raise RuntimeError('Could not save audio tags: '+result.stderr[-1000:])
             metadata=_json(path.parent/'library.json')
             metadata.pop(path.name,None)
-            metadata[destination.name]={**{k:item[k] for k in ('kind','excerpt','chapter_names','settings')},'title':title,'author':author,'notes':notes}
+            metadata[destination.name]={**{k:item[k] for k in ('kind','excerpt','chapter_names','settings','finished_dir')},'title':title,'author':author,'notes':notes}
             temp.replace(destination)
             if path!=destination:path.unlink()
             _write(path.parent/'library.json',metadata)

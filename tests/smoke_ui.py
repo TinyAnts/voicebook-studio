@@ -19,26 +19,26 @@ with tempfile.TemporaryDirectory() as d:
                                inbrowser=False,quiet=True,allowed_paths=[str(core.LIBRARY)],css=app.CSS,
                                theme=app.THEME)
         client=Client('http://127.0.0.1:7861',verbose=False)
-        initial=client.predict('', 'All', 'Newest first', list(app.MODELS)[0], 'Aiden', api_name='/job_status')
+        initial=client.predict('', 'All', 'Newest first', list(app.MODELS)[0], 'Aiden', list(app.TTS_ENGINES)[0], api_name='/job_status')
         assert 'READY WHEN YOU ARE' in initial[0]
         args=[handle_file(str(source)),None,['0'],list(app.MODELS)[0],'Aiden',None,1,0,10,320,
-              instruction,42,'M4B',app.DEMO_TEXT,False,1.1,.1,1,True,128]
+              instruction,42,'M4B',app.DEMO_TEXT,False,1.1,.1,1,True,128,list(app.ENGINES)[0],0,list(app.LAYOUTS)[0],list(app.CHAPTER_FORMATS)[0],list(app.TTS_ENGINES)[0]]
         client.predict(handle_file(str(source)),1,0,10,api_name='/inspect_chapters')
         client.predict(*args,api_name='/start_book')
         deadline=time.monotonic()+20
         while time.monotonic()<deadline:
-            status=client.predict('', 'All', 'Newest first', list(app.MODELS)[0], 'Aiden', api_name='/job_status')
+            status=client.predict('', 'All', 'Newest first', list(app.MODELS)[0], 'Aiden', list(app.TTS_ENGINES)[0], api_name='/job_status')
             if app.MANAGER.snapshot()['status'] in ('done','failed'):break
             time.sleep(.1)
         s=app.MANAGER.snapshot()
         assert s['status']=='done',s
-        status=client.predict('', 'All', 'Newest first', list(app.MODELS)[0], 'Aiden', api_name='/job_status')
+        status=client.predict('', 'All', 'Newest first', list(app.MODELS)[0], 'Aiden', list(app.TTS_ENGINES)[0], api_name='/job_status')
         assert 'READY TO LISTEN' in status[0],status[0]
         fresh=Client('http://127.0.0.1:7861',verbose=False)
-        assert 'READY TO LISTEN' in fresh.predict('', 'All', 'Newest first', list(app.MODELS)[0], 'Aiden', api_name='/job_status')[0]
+        assert 'READY TO LISTEN' in fresh.predict('', 'All', 'Newest first', list(app.MODELS)[0], 'Aiden', list(app.TTS_ENGINES)[0], api_name='/job_status')[0]
         assert Path(s['output']).is_file()
         untouched=Client('http://127.0.0.1:7861',verbose=False)
-        assert 'READY TO LISTEN' in untouched.predict(None,'All','Newest first',list(app.MODELS)[0],'Aiden',api_name='/job_status')[0]
+        assert 'READY TO LISTEN' in untouched.predict(None,'All','Newest first',list(app.MODELS)[0],'Aiden',list(app.TTS_ENGINES)[0],api_name='/job_status')[0]
         selected=client.predict(s['output'],api_name='/library_select')
         assert 'ui-smoke' in selected[1]
         updated=client.predict(s['output'],'Smoke Test Book','Test Author','Readable Test Book','Test note','','All','Newest first',api_name='/save_library')

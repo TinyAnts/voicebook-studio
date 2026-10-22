@@ -11,9 +11,17 @@
 5. Upload a **PDF or EPUB**, tick or untick the chapters to convert, check the **book cover preview** (or upload custom artwork), select **Fiction** or **Nonfiction**, and set reading speed, and click **Create audiobook**. Follow the live monitor above the form.
 6. Play the sample and download your final **M4B** (chapter markers) or **MP3**. Open **Library** to play older files, rename them, edit their title/author/notes, or move them to recoverable Trash. Jobs are saved in the `audiobooks` folder; rerunning the same job resumes missing passages.
 
-**More voices (optional):** Double-click `install-chatterbox.bat` for **Chatterbox Multilingual V3** and **Chatterbox Turbo**, or `install-kokoro.bat` for very fast **Kokoro-82M**. Chatterbox requires a **6–15-second voice-reference recording**, such as your own voice, or an authorized narrator's recording. You may need to install [Git for Windows](https://git-scm.com/downloads/win) for Chatterbox dependencies, and [espeak-ng](https://github.com/espeak-ng/espeak-ng/releases) for Kokoro.
+**Narrators:** 12 narrators out of the box — Aiden and Ryan (built-in Qwen voices) plus 10 library narrators of different ages, genders and accents (e.g. Arthur, an older British storyteller; Eleanor, a gentle older woman; Claire, a clear American nonfiction voice; Priya, warm Indian English). You can design new narrators from a written description, or add your own authorized recording. **For the best speed, also double-click `install-qwen-fast.bat` once.**
 
-**If Qwen3-TTS 1.7B exceeds 8 GB GPU memory**, use **Qwen3-TTS 0.6B** in the model dropdown; that backend is installed by the same `install.bat`. High-quality synthesis may be much slower than reading time. Your computer must remain on while generating a book.
+The app now uses only **Qwen3-TTS 1.7B** (CustomVoice for Aiden/Ryan, Base for cloned narrators, VoiceDesign for creating narrators). Each Qwen model downloads once on first use (about 4.5 GB each). Your computer must remain on while generating a book.
+
+## Faster narration on your GPU
+
+Qwen now narrates **several passages at once** on the GPU (*Batched GPU*), sized automatically to your card's free memory. If memory runs out it halves the batch and continues. For more speed, double-click **`install-qwen-fast.bat`** once: it adds an optional CUDA-graph engine in `.venv-qwenfast` (the Qwen model is not downloaded again). *Auto* uses it when installed and falls back to Batched if it fails. Choose the engine and batch size in the **GPU speed** panel (section 3, below the advanced settings); the monitor shows the measured **narration speed** so you can compare. Changing your chapter selection reuses passages already narrated with the same voice and settings.
+
+## Optional engine: Fish Audio S2 Pro (4-bit)
+
+Double-click **`install-fish.bat`** (needs Docker Desktop with GPU support, Git and about 15 GB of disk). It installs the community [4-bit S2 Pro build](https://huggingface.co/scarxity/fish-speech-s2-pro-nf4) into `%LOCALAPPDATA%\VoicebookStudio\fish-speech`, outside OneDrive. Then choose **Speech engine → Fish S2 Pro** with any library narrator; the app starts the Docker server itself (first start ≈ 5 minutes) and it unloads after 5 idle minutes. `stop-fish.bat` frees the GPU at once. Licence: Fish Audio Research License — research / non-commercial use only.
 
 ## Continuing development with Claude
 
@@ -50,7 +58,7 @@ New downloads use readable book/chapter, narrator, model and speed names, for ex
 
 EPUB titles come from book metadata where available. PDFs/text use the source filename. Multiple selected chapters are labeled by chapter number. Different versions with otherwise identical names receive `(2)`, `(3)`, and so on. Internal cache folders retain their fingerprints so old narration still resumes. Older files are left intact and can be renamed in the library.
 
-**Create missing voice samples** reads one shared passage for every built-in voice in the selected installed model, at 1× using the current tone, seed and export quality. The first run needs local speech generation; later runs reuse matching saved files without loading a model. Switch narrators and select a saved sample to compare voices. Chatterbox uses your reference recording through **Generate voice preview** instead. No fabricated or third-party recordings are bundled.
+**Create missing samples for all narrators** reads one shared passage with every narrator at 1×, loading each Qwen model once. Later runs reuse matching saved files without loading a model. Switch narrators and select a saved sample to compare voices. The bundled library narrators are short synthetic reference clips made with Qwen VoiceDesign; no recordings of real people are bundled.
 
 The separate **Voice preview text** box lets you audition your own passage, or select **Use selected book excerpt instead**. Previews are saved automatically. If you change the text, voice, tone, reference recording or seed, that is a new sample. The library keeps previous versions for comparison.
 
@@ -69,9 +77,9 @@ The progress layout follows [Nielsen Norman Group guidance on progress indicator
 | Fiction / nonfiction style presets | ✅ (Qwen 1.7B prompt instructions) |
 | **Listen before deciding on a voice** | ✅ (generate and play a short sample) |
 | Compare previously generated voice previews | ✅ |
-| Qwen3-TTS 1.7B and 0.6B, Aiden/Ryan | ✅ |
-| Chatterbox Multilingual V3 / Turbo with voice cloning | ✅ optional install |
-| Kokoro 82M predefined voices | ✅ optional install |
+| Qwen3-TTS 1.7B: Aiden/Ryan + 10 library narrators (men and women, 20s–70s, American/British/Indian English) | ✅ |
+| Design a narrator from a description (Qwen VoiceDesign) | ✅ |
+| Clone your own authorized recording | ✅ |
 | Long-book cache / resume | ✅ |
 | Regenerate one chapter without other chapters | ✅ (select one chapter) |
 | MP3 and M4B with navigable chapters | ✅ |
@@ -92,7 +100,7 @@ Books, generated audio, model environments and secrets are excluded from Git by 
 
 ## Optional remote access / hosting
 
-You normally need **no hosting**: the program runs at `127.0.0.1:7860` in your laptop's browser. GitHub Pages and Cloudflare Pages can serve a website but **cannot execute GPU-powered Qwen or Chatterbox inference**. You would need to connect a separate running GPU backend.
+You normally need **no hosting**: the program runs at `127.0.0.1:7860` in your laptop's browser. GitHub Pages and Cloudflare Pages can serve a website but **cannot execute GPU-powered Qwen inference**. You would need to connect a separate running GPU backend.
 
 If you occasionally want to access the laptop from your phone, install [Tailscale](https://tailscale.com/download) on both devices. With the app running, on the laptop run:
 
@@ -111,7 +119,7 @@ Use the private HTTPS URL given by Tailscale from your connected phone; the lapt
 - **Scanned/image-only PDFs require OCR** before importing. Text extraction from complex layouts, equations, footnotes and tables may require manual cleanup.
 - PDF bookmarks are used when available; otherwise the app creates user-selectable **page-group sections**, which may not exactly align with actual chapters. EPUB internal spine sections can likewise differ from editorial chapters.
 - The models generate speech in ~320-character chunks and cache WAV output. Very long books need substantial disk space, and occasional mispronunciations/repeated words can require rerunning a passage/chapter.
-- Each Chatterbox recording should be a **clean, authorized** 6–15 second clip. Voice cloning should not impersonate someone without consent.
+- A recording used as a narrator should be a **clean, authorized** 8–20 second clip with an exact transcript. Voice cloning should not impersonate someone without consent.
 - DRM removal is not supported. Only narrate books you are permitted to process; personal listening does not automatically authorize redistributing generated audiobooks.
 - This update was tested with actual FFmpeg encoding, metadata/cover/chapter preservation, cached export, sample reuse, job cancellation/resume, and Gradio event/API calls. Model lifecycle tests use a small test worker; this update was not run against a real GPU or Windows installation here. The new theme was visually checked in Chromium; GPU inference and a native Windows launch were not run here. Your installed model backends remain independent.
 
@@ -130,8 +138,9 @@ voicebook_studio/
 ├── theme.py                     # Shared charcoal/cream/terracotta theme
 ├── requirements-ui.txt
 ├── install.bat / start.bat      # Double-click install / launch
-├── install-chatterbox.bat       # Optional custom narrator backend
-├── install-kokoro.bat           # Optional fast backend
+├── install-qwen-fast.bat        # Optional CUDA-graph speed engine
+├── voices.py / voices/          # Narrator library (reference recordings)
+├── update-github.bat            # Push source changes to GitHub
 ├── setup.ps1                    # Model environments and dependencies
 ├── publish-github.bat / .ps1   # One-click private GitHub repo publisher
 ├── .github/workflows/tests.yml # Automated unit tests
@@ -139,7 +148,7 @@ voicebook_studio/
 └── hf_space/                    # Optional separate Hugging Face voice preview
 ```
 
-Model sources and licenses: [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) (Apache 2.0), [Chatterbox](https://github.com/resemble-ai/chatterbox) (MIT), [Kokoro](https://github.com/hexgrad/kokoro) (Apache 2.0). All can run without per-character API costs after downloading their weights. Third-party components retain their own license terms.
+Model source and license: [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) (Apache 2.0); speed engine [faster-qwen3-tts](https://pypi.org/project/faster-qwen3-tts/). Runs without per-character API costs after downloading the weights. The library narrators are synthetic voices designed with Qwen VoiceDesign, not recordings of real people.
 
 ### Developer tests
 

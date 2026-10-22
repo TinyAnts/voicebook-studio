@@ -1,0 +1,8 @@
+{
+  "id": "arthur",
+  "name": "Arthur",
+  "label": "older man \u00b7 70s \u00b7 deep, warm British storyteller",
+  "description": "An elderly British man in his seventies with a deep, warm, slightly gravelly voice. Calm, kind grandfather telling a story by the fire. Slow, steady pace, clear diction.",
+  "ref_text": "The old house at the end of the lane had stood empty for many years. Each autumn, the leaves gathered on its steps, and the village children wondered who had lived there, and why they had never come back.",
+  "source": "Qwen3-TTS-12Hz-1.7B-VoiceDesign (synthetic voice)"
+}

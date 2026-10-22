@@ -1,0 +1,21 @@
+==== OOM lines 10/22/2026 13:54:03
+Unable to find image 'alpine:latest' locally
+latest: Pulling from library/alpine
+7b229517ed22: Pulling fs layer
+7b229517ed22: Download complete
+3da1513d2124: Download complete
+3ec36f3670df: Download complete
+7b229517ed22: Pull complete
+Digest: sha256:71e9b7bae160ba167fa17414401b94cbcdaf3c32feeab9298bd794a2a0614c35
+Status: Downloaded newer image for alpine:latest
+[ 7318.433314] wsl-bootstrap invoked oom-killer: gfp_mask=0x140cca(GFP_HIGHUSER_MOVABLE|__GFP_COMP), order=0, oom_score_adj=-999
+[ 7318.671570] oom-kill:constraint=CONSTRAINT_NONE,nodemask=(null),cpuset=/,mems_allowed=0,global_oom,task_memcg=/docker/2d0930b11f79747e86cf8c019f987bcacc90011b90fc0923aa8641d81cfdbc6b,task=python3,pid=40990,uid=1000
+[ 7318.679489] Out of memory: Killed process 40990 (python3) total-vm:55602772kB, anon-rss:12798984kB, file-rss:512kB, shmem-rss:0kB, UID:1000 pgtables:33796kB oom_score_adj:0
+[wsl2]
+memory=22GB
+swap=16GB
+swapFile=D:\\wsl\\swap.vhdx
+
+[experimental]
+autoMemoryReclaim=gradual
+Docker RAM now: 21.5 GB

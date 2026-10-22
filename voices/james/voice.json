@@ -1,0 +1,8 @@
+{
+  "id": "james",
+  "name": "James",
+  "label": "middle-aged man \u00b7 40s \u00b7 calm American documentary",
+  "description": "A middle-aged American man in his forties with a deep, smooth, calm baritone. Confident documentary narrator, measured pace, natural and trustworthy.",
+  "ref_text": "The old house at the end of the lane had stood empty for many years. Each autumn, the leaves gathered on its steps, and the village children wondered who had lived there, and why they had never come back.",
+  "source": "Qwen3-TTS-12Hz-1.7B-VoiceDesign (synthetic voice)"
+}

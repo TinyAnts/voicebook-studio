@@ -106,7 +106,7 @@ body {background:#262624;}
 @keyframes working {to{background-position:-200% 0}}
 @media(prefers-reduced-motion:reduce){.job-progress{animation:none!important;transition:none!important;}}
 .job-message {font-size:14px;line-height:1.6;margin:12px 0;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--vb-text);}
-.metrics {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;padding:16px 0;border-top:1px solid var(--vb-border);border-bottom:1px solid var(--vb-border);margin:16px 0;}
+.metrics {display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:14px 16px;padding:16px 0;border-top:1px solid var(--vb-border);border-bottom:1px solid var(--vb-border);margin:16px 0;}
 .metric span {display:block;font-size:12px;color:var(--vb-muted);margin-bottom:6px;line-height:1.4;}
 .metric strong {font-size:20px;font-weight:600;color:var(--vb-text);font-variant-numeric:tabular-nums;}
 .current-passage {font-size:14px;margin:16px 0;padding:12px 15px;background:#38352f;border-left:3px solid var(--vb-accent);border-radius:4px;color:var(--vb-text);}
@@ -122,7 +122,48 @@ body {background:#262624;}
 #library-detail {overflow-wrap:anywhere;font-size:14px;color:var(--vb-muted);line-height:1.7;}
 #library-detail h3 {font-family:Georgia,'Times New Roman',serif;font-size:25px;font-weight:500;color:var(--vb-text);margin:0 0 10px;}
 #library-detail p {color:var(--vb-muted);margin:6px 0;}
-#job-actions {margin:0 0 6px;}
+#job-actions {margin:0;gap:10px;}
+/* Gradio sets overflow:hidden on the container, which disables position:sticky. clip keeps
+   the no-horizontal-scroll behaviour without creating a scroll container. */
+.gradio-container {overflow:clip visible!important;overflow-x:clip!important;overflow-y:visible!important;}
+#job-dashboard {padding:0!important;border:0!important;background:transparent!important;}
+#job-dashboard .html-container,.step-head-wrap .html-container,.sub-title-wrap .html-container {padding:0!important;}
+/* ---- Layout: steps on the left, create + live progress pinned on the right ---- */
+#create-layout,#library-layout {align-items:flex-start!important;gap:24px;}
+#steps {gap:18px!important;}
+.step-card {border:1px solid #4a473f!important;border-radius:16px!important;background:#2b2b28!important;padding:20px!important;gap:14px!important;}
+.step-head {display:flex;gap:14px;align-items:flex-start;margin:0 0 2px;}
+.step-head h3 {margin:0;font-size:19px;font-weight:600;color:var(--vb-text);line-height:1.3;}
+.step-head p {margin:4px 0 0;font-size:13.5px;color:var(--vb-muted);line-height:1.5;}
+.step-num {flex:none;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:14px;background:#d99a7d;color:#261e1a;}
+.sub-card {border:1px solid #4a473f!important;border-radius:12px!important;background:#262624!important;padding:14px!important;gap:12px!important;}
+.sub-title {margin:0;font-size:15px;font-weight:600;color:var(--vb-text);}
+.compact-row {gap:10px!important;align-items:center!important;}
+#cover-column {gap:8px!important;}
+/* Narrator picker: a two-column list of voice "chips"; the card beside it plays the ready sample. */
+#narrator-grid .wrap {display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px!important;}
+#narrator-grid .wrap label {width:100%!important;margin:0!important;padding:10px 12px!important;border-radius:10px!important;line-height:1.35;white-space:normal!important;}
+#narrator-card {position:sticky;top:12px;}
+#narrator-name h3 {font-family:Georgia,'Times New Roman',serif;font-size:24px;font-weight:500;margin:0 0 4px;color:var(--vb-text);}
+#narrator-name p {margin:0;color:var(--vb-muted);font-size:14px;line-height:1.5;}
+.narrator-tag {display:inline-block;margin-top:8px;border:1px solid #756757;border-radius:20px;padding:3px 10px;background:#3b342e;color:#f1c7ad;font-size:12px;font-weight:600;}
+#engine-pick .wrap {gap:8px!important;}
+/* No inner scrolling here: Chromium fails to paint a scrolling box inside a sticky column. */
+#side {position:sticky;top:12px;align-self:flex-start;gap:12px!important;flex-wrap:nowrap!important;}
+#side > * {flex-shrink:0!important;}
+#create-button {min-height:52px;font-size:17px!important;}
+#side .job-card {padding:16px 18px;}
+#side .job-card h2 {font-size:21px!important;margin:4px 0 6px!important;}
+#side .stages {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:12px 0;}
+#side .metrics {padding:10px 0;margin:10px 0;}
+#side .job-message {margin:8px 0;}
+#side .current-passage {margin:10px 0;padding:9px 12px;font-size:13px;}
+#side .current-passage p {line-height:1.5;}
+#side .worker-line {font-size:12px;line-height:1.6;}
+#side .job-foot {font-size:11.5px;margin-top:6px;}
+#side .metrics {grid-template-columns:repeat(3,minmax(0,1fr));gap:14px 12px;}
+#side .metric strong {font-size:16px;white-space:nowrap;}
+.side-note p {font-size:12.5px!important;}
 #conversion-result {border:1px solid #625d54;border-radius:12px;padding:18px;background:#30302c;}
 /* Dropdown menus are portalled in some Gradio versions. Give the popup its
    own opaque surface so underlying text never shows through the options. */
@@ -147,6 +188,9 @@ body [role='option']:hover,body [role='option'].active,body [role='option'][aria
 .gradio-container .prose strong {color:#f2efe8;}
 .gradio-container .prose a {color:#efb89a;}
 .gradio-container audio {color-scheme:dark;}
+@media(max-width:900px){
+  #side {position:static!important;max-height:none!important;overflow:visible!important;}
+}
 @media(max-width:700px){
   .gradio-container .row > .column,.gradio-container .row > .form {min-width:0!important;flex-basis:100%!important;}
   .gradio-container .block {min-width:0!important;}
@@ -154,6 +198,13 @@ body [role='option']:hover,body [role='option'].active,body [role='option'][aria
   .gradio-container [role='tab'] {min-width:0!important;max-width:100%!important;white-space:normal!important;flex:1 1 100%!important;text-align:left;}
 
   #job-actions > button {flex:1 1 100%!important;min-height:42px;}
+  #side {position:static;max-height:none;overflow:visible;}
+  #side .metrics {grid-template-columns:repeat(2,minmax(0,1fr));}
+  #narrator-grid .wrap {grid-template-columns:1fr;}
+  #narrator-card {position:static;}
+  #side .metric strong {white-space:normal;}
+  .gradio-container .label-wrap {text-align:left!important;justify-content:space-between!important;}
+  .step-card {padding:14px!important;}
   #conversion-result {padding:12px;}
 
   #masthead {align-items:start;padding-top:16px;} #masthead h1 {font-size:27px;}

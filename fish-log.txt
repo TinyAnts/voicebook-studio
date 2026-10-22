@@ -1,0 +1,253 @@
+==== Thu 10/22/2026 13:50:49.60   Fish folder: D:\VoicebookFish
+==== containers
+NAME                   IMAGE                COMMAND                  SERVICE   CREATED          STATUS                    PORTS
+fish-speech-server-1   fish-speech-server   "/app/start_server.sh"   server    14 minutes ago   Up 11 minutes (healthy)   0.0.0.0:8880->8880/tcp, [::]:8880->8880/tcp
+==== server log (last 400 lines)
+server-1  | [2026-10-22 11:36:18] Starting Fish Speech API Server...
+server-1  | [2026-10-22 11:36:18] Device args: none
+server-1  | [2026-10-22 11:36:18] Compile args: --compile
+server-1  | [2026-10-22 11:36:18] Half args: --half
+server-1  | [2026-10-22 11:36:18] BnB4 args: --bnb4
+server-1  | [2026-10-22 11:36:18] Lazy args: --lazy-load
+server-1  | [2026-10-22 11:36:18] Codec args: none
+server-1  | [2026-10-22 11:36:18] Offload embeddings: 0
+server-1  | [2026-10-22 11:36:18] Server: 0.0.0.0:8880
+server-1  | /app/.venv/lib/python3.12/site-packages/audiotools/core/audio_signal.py:32: SyntaxWarning: invalid escape sequence '\_'
+server-1  |   """
+server-1  | /app/.venv/lib/python3.12/site-packages/audiotools/core/audio_signal.py:1012: SyntaxWarning: invalid escape sequence '\_'
+server-1  |   """Wrapper around scipy.signal.get_window so one can also get the
+server-1  | /app/.venv/lib/python3.12/site-packages/audiotools/core/audio_signal.py:1092: SyntaxWarning: invalid escape sequence '\_'
+server-1  |   """Compute how the STFT should be padded, based on match\_stride.
+server-1  | /app/.venv/lib/python3.12/site-packages/audiotools/core/audio_signal.py:1131: SyntaxWarning: invalid escape sequence '\_'
+server-1  |   """Computes the short-time Fourier transform of the audio data,
+server-1  | /app/.venv/lib/python3.12/site-packages/audiotools/core/audio_signal.py:1222: SyntaxWarning: invalid escape sequence '\_'
+server-1  |   """Computes inverse STFT and sets it to audio\_data.
+server-1  | /app/.venv/lib/python3.12/site-packages/pydantic/_internal/_fields.py:132: UserWarning: Field "model_id" in temporary_model has conflict with protected namespace "model_".
+server-1  | 
+server-1  | You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+server-1  |   warnings.warn(
+server-1  | [32mINFO[0m:     Started server process [[36m24[0m]
+server-1  | [32mINFO[0m:     Waiting for application startup.
+server-1  | [32m2026-10-22 11:36:57.259[0m | [1mINFO    [0m | [36mtools.server.model_manager[0m:[36m__init__[0m:[36m47[0m - [1mModelManager ready (lazy load enabled; models load on first request).[0m
+server-1  | [32m2026-10-22 11:36:57.259[0m | [1mINFO    [0m | [36m__main__[0m:[36minitialize_app[0m:[36m112[0m - [1mStartup done, listening server at http://0.0.0.0:8880[0m
+server-1  | [32m2026-10-22 11:36:57.259[0m | [1mINFO    [0m | [36m__main__[0m:[36m_idle_watchdog[0m:[36m117[0m - [1mIdle watchdog started; the server will shut down after 300s of inactivity.[0m
+server-1  | [32mINFO[0m:     Application startup complete.
+server-1  | [32mINFO[0m:     Uvicorn running on [1mhttp://0.0.0.0:8880[0m (Press CTRL+C to quit)
+server-1  | [32mINFO[0m:     172.21.0.1:46512 - "[1mGET /v1/health HTTP/1.1[0m" [32m200 OK[0m
+server-1  | [32m2026-10-22 11:36:58.589[0m | [1mINFO    [0m | [36mtools.server.model_manager[0m:[36mensure_loaded[0m:[36m59[0m - [1mFirst request received — loading models now...[0m
+server-1  | [32m2026-10-22 11:36:58.627[0m | [1mINFO    [0m | [36mfish_speech.models.text2semantic.llama[0m:[36mfrom_pretrained[0m:[36m664[0m - [1mOverride max_seq_len to 4096[0m
+server-1  | [32m2026-10-22 11:37:01.358[0m | [1mINFO    [0m | [36mfish_speech.models.text2semantic.llama[0m:[36mfrom_pretrained[0m:[36m674[0m - [1mInjected Semantic IDs into Config: 151678-155773[0m
+server-1  | [32m2026-10-22 11:37:01.359[0m | [1mINFO    [0m | [36mfish_speech.models.text2semantic.llama[0m:[36mfrom_pretrained[0m:[36m690[0m - [1mLoading model from checkpoints/s2-pro-nf4, config: DualARModelArgs(model_type='dual_ar', vocab_size=155776, n_layer=36, n_head=32, dim=2560, intermediate_size=9728, n_local_heads=8, head_dim=128, rope_base=1000000, norm_eps=1e-06, max_seq_len=4096, dropout=0.0, tie_word_embeddings=True, attention_qkv_bias=False, attention_o_bias=False, attention_qk_norm=True, codebook_size=4096, num_codebooks=10, semantic_begin_id=151678, semantic_end_id=155773, use_gradient_checkpointing=True, initializer_range=0.01976423537605237, is_reward_model=False, scale_codebook_embeddings=True, audio_embed_dim=2560, n_fast_layer=4, fast_dim=2560, fast_n_head=32, fast_n_local_heads=8, fast_head_dim=128, fast_intermediate_size=9728, fast_attention_qkv_bias=False, fast_attention_qk_norm=False, fast_attention_o_bias=False, norm_fastlayer_input=True)[0m
+server-1  | [2026-10-22 11:38:54] Starting Fish Speech API Server...
+server-1  | [2026-10-22 11:38:54] Device args: none
+server-1  | [2026-10-22 11:38:54] Compile args: --compile
+server-1  | [2026-10-22 11:38:54] Half args: --half
+server-1  | [2026-10-22 11:38:54] BnB4 args: --bnb4
+server-1  | [2026-10-22 11:38:54] Lazy args: --lazy-load
+server-1  | [2026-10-22 11:38:54] Codec args: none
+server-1  | [2026-10-22 11:38:54] Offload embeddings: 0
+server-1  | [2026-10-22 11:38:54] Server: 0.0.0.0:8880
+server-1  | /app/.venv/lib/python3.12/site-packages/audiotools/core/audio_signal.py:32: SyntaxWarning: invalid escape sequence '\_'
+server-1  |   """
+server-1  | /app/.venv/lib/python3.12/site-packages/audiotools/core/audio_signal.py:1012: SyntaxWarning: invalid escape sequence '\_'
+server-1  |   """Wrapper around scipy.signal.get_window so one can also get the
+server-1  | /app/.venv/lib/python3.12/site-packages/audiotools/core/audio_signal.py:1092: SyntaxWarning: invalid escape sequence '\_'
+server-1  |   """Compute how the STFT should be padded, based on match\_stride.
+server-1  | /app/.venv/lib/python3.12/site-packages/audiotools/core/audio_signal.py:1131: SyntaxWarning: invalid escape sequence '\_'
+server-1  |   """Computes the short-time Fourier transform of the audio data,
+server-1  | /app/.venv/lib/python3.12/site-packages/audiotools/core/audio_signal.py:1222: SyntaxWarning: invalid escape sequence '\_'
+server-1  |   """Computes inverse STFT and sets it to audio\_data.
+server-1  | /app/.venv/lib/python3.12/site-packages/pydantic/_internal/_fields.py:132: UserWarning: Field "model_id" in temporary_model has conflict with protected namespace "model_".
+server-1  | 
+server-1  | You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+server-1  |   warnings.warn(
+server-1  | [32mINFO[0m:     Started server process [[36m23[0m]
+server-1  | [32mINFO[0m:     Waiting for application startup.
+server-1  | [32m2026-10-22 11:39:35.768[0m | [1mINFO    [0m | [36mtools.server.model_manager[0m:[36m__init__[0m:[36m47[0m - [1mModelManager ready (lazy load enabled; models load on first request).[0m
+server-1  | [32m2026-10-22 11:39:35.769[0m | [1mINFO    [0m | [36m__main__[0m:[36minitialize_app[0m:[36m112[0m - [1mStartup done, listening server at http://0.0.0.0:8880[0m
+server-1  | [32m2026-10-22 11:39:35.769[0m | [1mINFO    [0m | [36m__main__[0m:[36m_idle_watchdog[0m:[36m117[0m - [1mIdle watchdog started; the server will shut down after 300s of inactivity.[0m
+server-1  | [32mINFO[0m:     Application startup complete.
+server-1  | [32mINFO[0m:     Uvicorn running on [1mhttp://0.0.0.0:8880[0m (Press CTRL+C to quit)
+server-1  | [32mINFO[0m:     127.0.0.1:52660 - "[1mGET /v1/health HTTP/1.1[0m" [32m200 OK[0m
+server-1  | [32mINFO[0m:     127.0.0.1:50986 - "[1mGET /v1/health HTTP/1.1[0m" [32m200 OK[0m
+server-1  | [32mINFO[0m:     127.0.0.1:51732 - "[1mGET /v1/health HTTP/1.1[0m" [32m200 OK[0m
+server-1  | [32mINFO[0m:     127.0.0.1:55716 - "[1mGET /v1/health HTTP/1.1[0m" [32m200 OK[0m
+server-1  | [32mINFO[0m:     127.0.0.1:55782 - "[1mGET /v1/health HTTP/1.1[0m" [32m200 OK[0m
+server-1  | [32mINFO[0m:     127.0.0.1:33064 - "[1mGET /v1/health HTTP/1.1[0m" [32m200 OK[0m
+server-1  | [32mINFO[0m:     127.0.0.1:46382 - "[1mGET /v1/health HTTP/1.1[0m" [32m200 OK[0m
+server-1  | [32mINFO[0m:     127.0.0.1:50724 - "[1mGET /v1/health HTTP/1.1[0m" [32m200 OK[0m
+server-1  | [32mINFO[0m:     127.0.0.1:35100 - "[1mGET /v1/health HTTP/1.1[0m" [32m200 OK[0m
+server-1  | [32mINFO[0m:     127.0.0.1:60926 - "[1mGET /v1/health HTTP/1.1[0m" [32m200 OK[0m
+server-1  | [32mINFO[0m:     127.0.0.1:50438 - "[1mGET /v1/health HTTP/1.1[0m" [32m200 OK[0m
+server-1  | [32mINFO[0m:     127.0.0.1:38634 - "[1mGET /v1/health HTTP/1.1[0m" [32m200 OK[0m
+server-1  | [32mINFO[0m:     127.0.0.1:59324 - "[1mGET /v1/health HTTP/1.1[0m" [32m200 OK[0m
+server-1  | [32mINFO[0m:     127.0.0.1:41228 - "[1mGET /v1/health HTTP/1.1[0m" [32m200 OK[0m
+server-1  | [32mINFO[0m:     127.0.0.1:52622 - "[1mGET /v1/health HTTP/1.1[0m" [32m200 OK[0m
+server-1  | [32mINFO[0m:     127.0.0.1:58286 - "[1mGET /v1/health HTTP/1.1[0m" [32m200 OK[0m
+server-1  | [32mINFO[0m:     127.0.0.1:40408 - "[1mGET /v1/health HTTP/1.1[0m" [32m200 OK[0m
+server-1  | [32mINFO[0m:     127.0.0.1:46834 - "[1mGET /v1/health HTTP/1.1[0m" [32m200 OK[0m
+server-1  | [32mINFO[0m:     127.0.0.1:41822 - "[1mGET /v1/health HTTP/1.1[0m" [32m200 OK[0m
+server-1  | [32mINFO[0m:     127.0.0.1:57830 - "[1mGET /v1/health HTTP/1.1[0m" [32m200 OK[0m
+server-1  | [32mINFO[0m:     127.0.0.1:56212 - "[1mGET /v1/health HTTP/1.1[0m" [32m200 OK[0m
+server-1  | [32mINFO[0m:     127.0.0.1:57142 - "[1mGET /v1/health HTTP/1.1[0m" [32m200 OK[0m
+server-1  | [32mINFO[0m:     127.0.0.1:32990 - "[1mGET /v1/health HTTP/1.1[0m" [32m200 OK[0m
+==== compose.yml
+name: fish-speech
+
+services:
+  webui:
+    extends:
+      file: compose.base.yml
+      service: app-base
+    build:
+      target: webui
+    environment:
+      COMPILE: ${COMPILE:-0}
+    profiles: ["webui"]
+    ports:
+      - "${GRADIO_PORT:-7860}:7860"
+
+  server:
+    extends:
+      file: compose.base.yml
+      service: app-base
+    build:
+      target: server
+    environment:
+      # torch.compile the decode step: much faster per token; the one-time
+      # compile cost is paid during the eager warm-up at container start.
+      COMPILE: ${COMPILE:-1}
+      # Load the model at startup instead of on first request: the hermes TTS
+      # script times out at 60s, far less than the ~3 min lazy first load.
+      ENABLE_LAZY_LOAD: ${ENABLE_LAZY_LOAD:-0}
+    profiles: ["server"]
+    ports:
+      - "${API_PORT:-8880}:8880"
+
+  # Same server, tuned for a 4 GB card (RTX 3050 Laptop). Measured at 3294 MiB
+  # peak on the standard suite and 3462 MiB on a 44 s utterance, both on a
+  # 4096 MiB budget, sub-realtime throughout.
+  #
+  # Reference tokens must exist before starting, because the codec is loaded
+  # without its encoder:
+  #   docker compose run --rm --entrypoint uv server-4gb \
+  #     run --no-sync python tools/precompute_references.py
+  server-4gb:
+    extends:
+      file: compose.base.yml
+      service: app-base
+    build:
+      target: server
+    environment:
+      COMPILE: ${COMPILE:-1}
+      ENABLE_LAZY_LOAD: ${ENABLE_LAZY_LOAD:-0}
+      # Keep the 155776x2560 fp16 embedding table in host memory; decode reads
+      # the resident 4097-row slice instead. ~0.72 GiB.
+      FISH_OFFLOAD_EMBEDDINGS: "1"
+      # Drop the codec encoder and cast the decode path to fp16. ~1.36 GiB.
+      CODEC_DECODE_ONLY: "1"
+      # Both the KV cache and the torch.compile workspace scale with this, so
+      # raising it to widen the prompt budget costs more memory than it buys.
+      # Lower max_new_tokens per request instead - the budget is
+      # max_seq_len - max_new_tokens.
+      MAX_SEQ_LEN: ${MAX_SEQ_LEN:-2048}
+      # Decode the codec conv stack in 64-frame (~3 s) chunks so activations
+      # stop scaling with utterance length. Bit-exact beyond the conv
+      # receptive field (overlap 32 vs measured minimum 10); costs ~15% wall
+      # on long utterances, buys ~250 MiB of peak headroom.
+      FISH_DECODE_CHUNK_FRAMES: ${FISH_DECODE_CHUNK_FRAMES:-64}
+      # Path to a distilled depth transformer, e.g.
+      # checkpoints/fast-student-d1024.pt. Empty (the default) serves the
+      # teacher's own fast stack. Set it in .env - pointing at a file that is
+      # not there fails the load, so this cannot default to a path.
+      FISH_FAST_STUDENT: ${FISH_FAST_STUDENT:-}
+      PYTORCH_CUDA_ALLOC_CONF: expandable_segments:True
+    profiles: ["server-4gb"]
+    ports:
+      - "${API_PORT:-8880}:8880"
+
+  # WebUI with the same 4 GB tuning as server-4gb. Run one or the other, never
+  # both: each loads its own copy of the model.
+  #
+  # The codec has no encoder here, so uploading new reference audio through the
+  # UI will not work - only voices already under references/ with precomputed
+  # tokens are selectable.
+  webui-4gb:
+    extends:
+      file: compose.base.yml
+      service: app-base
+    build:
+      target: webui
+    environment:
+      COMPILE: ${COMPILE:-1}
+      FISH_OFFLOAD_EMBEDDINGS: "1"
+      CODEC_DECODE_ONLY: "1"
+      MAX_SEQ_LEN: ${MAX_SEQ_LEN:-2048}
+      FISH_DECODE_CHUNK_FRAMES: ${FISH_DECODE_CHUNK_FRAMES:-64}
+      FISH_FAST_STUDENT: ${FISH_FAST_STUDENT:-}
+      PYTORCH_CUDA_ALLOC_CONF: expandable_segments:True
+    profiles: ["webui-4gb"]
+    ports:
+      - "${GRADIO_PORT:-7860}:7860"
+==== .env
+ENABLE_LAZY_LOAD=1
+COMPILE=1
+API_PORT=8880
+==== docker memory limit
+CPUs=16 RAM_GB=16691429376
+==== .wslconfig
+The system cannot find the file specified.
+==== PC memory
+Total RAM GB: 31.9  Free: 11.4
+==== GPU
+Thu Oct 22 13:50:51 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 617.42                 KMD Version: 617.42        CUDA UMD Version: 13.4     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                  Driver-Model | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 3070 ...  WDDM  |   00000000:01:00.0  On |                  N/A |
+| N/A   52C    P0             35W /  115W |     608MiB /   8192MiB |      0%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A            3576    C+G   ...yb3d8bbwe\WindowsTerminal.exe      N/A      |
+|    0   N/A  N/A            3700    C+G   ...t\Edge\Application\msedge.exe      N/A      |
+|    0   N/A  N/A            9372    C+G   ...Chrome\Application\chrome.exe      N/A      |
+|    0   N/A  N/A            9460    C+G   ...App_cw5n1h2txyewy\LockApp.exe      N/A      |
+|    0   N/A  N/A            9704    C+G   ...em32\ApplicationFrameHost.exe      N/A      |
+|    0   N/A  N/A           10500    C+G   ...4__w2gh52qy24etm\Nahimic3.exe      N/A      |
+|    0   N/A  N/A           12828    C+G   ...UI3Apps\PowerToys.Peek.UI.exe      N/A      |
+|    0   N/A  N/A           13536    C+G   ...indows\System32\ShellHost.exe      N/A      |
+|    0   N/A  N/A           16716    C+G   ..._pzs8sxrjxfjjc\app\claude.exe      N/A      |
+|    0   N/A  N/A           17352    C+G   ...y\StartMenuExperienceHost.exe      N/A      |
+|    0   N/A  N/A           17696    C+G   ...2txyewy\CrossDeviceResume.exe      N/A      |
+|    0   N/A  N/A           17960    C+G   ....0.4283.62\msedgewebview2.exe      N/A      |
+|    0   N/A  N/A           18004    C+G   ...s\PowerToys.PowerLauncher.exe      N/A      |
+|    0   N/A  N/A           21420    C+G   ....0.4283.62\msedgewebview2.exe      N/A      |
+|    0   N/A  N/A           21568    C+G   ...Toys\PowerToys.FancyZones.exe      N/A      |
+|    0   N/A  N/A           22800    C+G   ...Chrome\Application\chrome.exe      N/A      |
+|    0   N/A  N/A           23420    C+G   ...em_tray\lghub_system_tray.exe      N/A      |
+|    0   N/A  N/A           24804    C+G   ...pp-4.0.827\RazerAppEngine.exe      N/A      |
+|    0   N/A  N/A           25840    C+G   ...IA app\CEF\NVIDIA Overlay.exe      N/A      |
+|    0   N/A  N/A           26808    C+G   ...5n1h2txyewy\TextInputHost.exe      N/A      |
+|    0   N/A  N/A           26996    C+G   ..._cw5n1h2txyewy\SearchHost.exe      N/A      |
+|    0   N/A  N/A           28976    C+G   ...lus\logioptionsplus_agent.exe      N/A      |
+|    0   N/A  N/A           29844    C+G   C:\Windows\explorer.exe               N/A      |
+|    0   N/A  N/A           30176    C+G   ...8bbwe\PhoneExperienceHost.exe      N/A      |
+|    0   N/A  N/A           30768    C+G   ...4__8wekyb3d8bbwe\Video.UI.exe      N/A      |
+|    0   N/A  N/A           30924    C+G   ...r\frontend\Docker Desktop.exe      N/A      |
+|    0   N/A  N/A           31524    C+G   ...IA app\CEF\NVIDIA Overlay.exe      N/A      |
+|    0   N/A  N/A           31736    C+G   ...s\PowerToys.ColorPickerUI.exe      N/A      |
+|    0   N/A  N/A           33064    C+G   ...t\Edge\Application\msedge.exe      N/A      |
+|    0   N/A  N/A           33680    C+G   ...ntrolPanel\SystemSettings.exe      N/A      |
+|    0   N/A  N/A           34480    C+G   ...ekyb3d8bbwe\BingWallpaper.exe      N/A      |
+|    0   N/A  N/A           36868    C+G   ..._pzs8sxrjxfjjc\app\claude.exe      N/A      |
++-----------------------------------------------------------------------------------------+

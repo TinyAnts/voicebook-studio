@@ -1,5 +1,3 @@
 @echo off
-cd /d "%~dp0"
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0setup.ps1" -Model kokoro
-if errorlevel 1 echo Kokoro setup failed. Other models remain available.
+echo Chatterbox and Kokoro were removed from Voicebook Studio. Only Qwen3-TTS 1.7B is used now.
 pause
